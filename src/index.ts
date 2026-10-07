@@ -5,6 +5,7 @@ import {
   clearNeedsPolicyAckForEmail,
   deleteOutlookForReservation,
   displayNameForEmail,
+  flagNeedsPolicyAckForEmail,
   outlookSyncMode,
   pullOutlookIntoApp,
   pushReservationToOutlook,
@@ -27,9 +28,11 @@ import {
 } from "./eligibility";
 import {
   addExtraAdmin,
+  deletePolicyAck,
   getPolicyAck,
   getReservation,
   getUserFlags,
+  hasInAppSignature,
   isAdmin,
   isCompletePolicyAck,
   listAdmins,
@@ -38,6 +41,7 @@ import {
   listReservationsForDay,
   listReservationsForUser,
   newReservationId,
+  putExternalPolicyAck,
   putPolicyAck,
   putReservation,
   putUserFlags,
@@ -114,6 +118,12 @@ export default {
           if (path === "/api/admin/policy-acks" && request.method === "GET") {
             const acks = await listPolicyAcks(env);
             return json({ ok: true, acks });
+          }
+          if (path === "/api/admin/policy-acks/external" && request.method === "POST") {
+            return await handleAdminExternalPolicyAck(request, env, session.email);
+          }
+          if (path === "/api/admin/policy-acks/revoke" && request.method === "POST") {
+            return await handleAdminRevokePolicyAck(request, env, session.email);
           }
           const signedPdfMatch = /^\/api\/admin\/policy-acks\/([^/]+)\/signed-pdf$/.exec(path);
           if (signedPdfMatch && request.method === "GET") {
@@ -307,6 +317,15 @@ async function handleAdminSignedPdf(
   const ack = await getPolicyAck(env, email);
   if (!isCompletePolicyAck(ack)) {
     return json({ error: "No complete signed policy for that email." }, 404);
+  }
+  if (!hasInAppSignature(ack)) {
+    return json(
+      {
+        error:
+          "This acknowledgment was recorded as an external / admin override — there is no in-app signature PDF to download.",
+      },
+      400
+    );
   }
   try {
     const origin = new URL(request.url).origin;
@@ -651,6 +670,86 @@ async function handleAdminOutlookSync(env: Env): Promise<Response> {
     roomEmail: roomEmail(env),
     roomName: roomDisplayName(env),
     ...stats,
+  });
+}
+
+async function handleAdminExternalPolicyAck(
+  request: Request,
+  env: Env,
+  adminEmail: string
+): Promise<Response> {
+  const body = await readJson(request);
+  const email = normalizeEmail(String(body.email || ""));
+  const domainErr = assertAllowedEmail(email, env.ALLOWED_EMAIL_DOMAIN);
+  if (domainErr) return json({ error: domainErr }, 400);
+
+  const printedName = String(body.printedName || "").trim();
+  if (!printedName) return json({ error: "Enter the employee's printed name." }, 400);
+  if (printedName.length > 120) return json({ error: "Printed name is too long." }, 400);
+
+  const externalNote = String(body.externalNote || body.note || "").trim();
+  if (externalNote.length > 2000) {
+    return json({ error: "Note / link is too long." }, 400);
+  }
+
+  const acknowledgedAtRaw = String(body.acknowledgedAt || body.signedDate || "").trim();
+  if (acknowledgedAtRaw) {
+    const okDate =
+      /^\d{4}-\d{2}-\d{2}$/.test(acknowledgedAtRaw) ||
+      !Number.isNaN(new Date(acknowledgedAtRaw).getTime());
+    if (!okDate) return json({ error: "Signed date looks invalid." }, 400);
+  }
+
+  const ack = await putExternalPolicyAck(env, {
+    email,
+    printedName,
+    adminEmail,
+    externalNote: externalNote || undefined,
+    acknowledgedAt: acknowledgedAtRaw || undefined,
+  });
+  // No stamped-PDF email for external overrides — copy lives outside this app.
+  await clearNeedsPolicyAckForEmail(env, email);
+  return json({ ok: true, ack }, 201);
+}
+
+async function handleAdminRevokePolicyAck(
+  request: Request,
+  env: Env,
+  adminEmail: string
+): Promise<Response> {
+  const body = await readJson(request);
+  const email = normalizeEmail(String(body.email || ""));
+  if (!email) return json({ error: "email required." }, 400);
+  const note = String(body.note || body.reason || "").trim();
+  if (note.length > 2000) return json({ error: "Note is too long." }, 400);
+
+  const existing = await getPolicyAck(env, email);
+  if (!existing) {
+    return json({ error: "No policy acknowledgment on file for that email." }, 404);
+  }
+
+  const deleted = await deletePolicyAck(env, email);
+  if (!deleted) {
+    return json({ error: "Could not remove that acknowledgment." }, 500);
+  }
+
+  await flagNeedsPolicyAckForEmail(env, email);
+  console.log(
+    `[policy-ack] revoked by ${adminEmail} for ${email}` +
+      (note ? ` note=${JSON.stringify(note)}` : "") +
+      ` priorVersion=${existing.policyVersion} priorSource=${existing.source || "app"}`
+  );
+  return json({
+    ok: true,
+    email,
+    revokedBy: adminEmail,
+    note: note || undefined,
+    prior: {
+      printedName: existing.printedName,
+      policyVersion: existing.policyVersion,
+      source: existing.source || "app",
+      acknowledgedAt: existing.acknowledgedAt,
+    },
   });
 }
 

@@ -28,7 +28,7 @@
   <main class="wrap">
     <section class="card">
       <h1>Office Manager tools</h1>
-      <p class="lede">List reservations, release after grace (or anytime as admin), create overrides, flag exceptions, manage who is an admin, and review signed policies. Policy PDF: <a href="/BOXABL-EV-Charging-Policy.pdf" target="_blank" rel="noopener">open</a>.</p>
+      <p class="lede">List reservations, release after grace (or anytime as admin), create overrides, flag exceptions, manage who is an admin, review signed policies, and record external policy signatures. Policy PDF: <a href="/BOXABL-EV-Charging-Policy.pdf" target="_blank" rel="noopener">open</a>.</p>
       <div class="tabs">
         <button type="button" class="active" data-tab="reservations">Reservations</button>
         <button type="button" data-tab="override">Override book</button>
@@ -129,13 +129,41 @@
 
     <section class="card tab-panel" id="panel-acks" hidden>
       <h2>Policy acknowledgments</h2>
-      <p class="lede">Download rebuilds the same stamped policy PDF we email (company policy + Acknowledgment page).</p>
+      <p class="lede">In-app signs show a signature thumbnail and <strong>Download signed PDF</strong>. If someone already signed on paper / SharePoint / the old process, record it below so they can reserve without the in-app pad (no stamped PDF email). Use <strong>Revoke</strong> when a new policy version requires re-sign.</p>
+
+      <h3 style="margin-top:8px;font-size:1.05rem">Record external / admin override</h3>
+      <form id="external-ack-form">
+        <div class="form-grid">
+          <div class="field">
+            <label for="ext-email">Employee email</label>
+            <input id="ext-email" type="email" required placeholder="name@boxabl.com">
+          </div>
+          <div class="field">
+            <label for="ext-name">Printed name</label>
+            <input id="ext-name" type="text" required placeholder="Full legal name" maxlength="120">
+          </div>
+          <div class="field">
+            <label for="ext-date">Signed date (optional)</label>
+            <input id="ext-date" type="date">
+          </div>
+        </div>
+        <div class="field" style="margin-top:12px">
+          <label for="ext-note">Where the signed copy is indexed (optional)</label>
+          <textarea id="ext-note" placeholder="SharePoint link, filing note, etc."></textarea>
+        </div>
+        <div class="btn-row">
+          <button type="submit" class="btn btn-accent">Mark as signed externally</button>
+        </div>
+        <div class="msg" id="ext-ack-msg" role="status"></div>
+      </form>
+
+      <h3 style="margin-top:22px;font-size:1.05rem">All acknowledgments</h3>
       <div class="table-wrap">
         <table>
           <thead>
-            <tr><th>Email</th><th>Printed name</th><th>Signature</th><th>Acknowledged (UTC)</th><th>Version</th><th>Signed PDF</th></tr>
+            <tr><th>Email</th><th>Printed name</th><th>Signature / source</th><th>Acknowledged (UTC)</th><th>Version</th><th>Signed PDF</th><th>Actions</th></tr>
           </thead>
-          <tbody id="ack-body"><tr><td colspan="6">Loading…</td></tr></tbody>
+          <tbody id="ack-body"><tr><td colspan="7">Loading…</td></tr></tbody>
         </table>
       </div>
       <div class="msg" id="ack-msg" role="status"></div>

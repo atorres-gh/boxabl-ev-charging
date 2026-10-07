@@ -355,4 +355,5 @@ th {
 
 .badge.needs-sig { background: #fff3cd; color: #7a5b00; border: 1px solid #e6c200; }
 .badge.outlook { background: #e8f0fe; color: #184273; border: 1px solid #a8c0e8; }
+.badge.external { background: #ede7f6; color: #4527a0; border: 1px solid #b39ddb; }
 .msg.warn { background: #fff8e6; color: #5c4a00; border: 1px solid #e6c200; }

@@ -52,8 +52,18 @@ export interface PolicyAck {
   policyVersion: string;
   /** Legal printed name at acknowledgment time. */
   printedName: string;
-  /** Drawn signature as PNG data URL. */
+  /**
+   * Drawn signature as PNG data URL for in-app signs.
+   * Empty for admin external overrides (paper / SharePoint / old process).
+   */
   signatureDataUrl: string;
+  /** How the ack was recorded. Default / omit = in-app pad. */
+  source?: "app" | "admin_external";
+  /** Where the external signed copy lives (note or link). */
+  externalNote?: string;
+  /** Admin who recorded an external override. */
+  overriddenBy?: string;
+  overriddenAt?: string;
 }
 
 export interface UserFlags {
@@ -95,12 +105,21 @@ export async function getPolicyAck(env: Env, email: string): Promise<PolicyAck |
   return (await env.EV_STORE.get(`ack:${email.toLowerCase()}`, "json")) as PolicyAck | null;
 }
 
-/** True when ack has printed name + signature (checkbox-only legacy acks count as incomplete). */
+/** True when ack is usable for reserving (in-app name+sig, or admin external override with printed name). */
 export function isCompletePolicyAck(ack: PolicyAck | null | undefined): boolean {
   if (!ack) return false;
   const name = (ack.printedName || "").trim();
+  if (!name) return false;
+  if (ack.source === "admin_external") return true;
   const sig = (ack.signatureDataUrl || "").trim();
-  return name.length > 0 && sig.startsWith("data:image/");
+  return sig.startsWith("data:image/");
+}
+
+/** True when ack has a drawable in-app signature (for stamped PDF download/email). */
+export function hasInAppSignature(ack: PolicyAck | null | undefined): boolean {
+  if (!ack) return false;
+  if (ack.source === "admin_external") return false;
+  return (ack.signatureDataUrl || "").trim().startsWith("data:image/");
 }
 
 export async function putPolicyAck(
@@ -115,9 +134,59 @@ export async function putPolicyAck(
     policyVersion: POLICY_VERSION,
     printedName: printedName.trim(),
     signatureDataUrl: signatureDataUrl.trim(),
+    source: "app",
   };
   await env.EV_STORE.put(`ack:${ack.email}`, JSON.stringify(ack));
   return ack;
+}
+
+/** Admin records that the employee already signed outside this app (paper / SharePoint / etc.). */
+export async function putExternalPolicyAck(
+  env: Env,
+  input: {
+    email: string;
+    printedName: string;
+    adminEmail: string;
+    externalNote?: string;
+    /** ISO or YYYY-MM-DD; defaults to now. */
+    acknowledgedAt?: string;
+  }
+): Promise<PolicyAck> {
+  const email = input.email.toLowerCase();
+  let acknowledgedAt = new Date().toISOString();
+  if (input.acknowledgedAt) {
+    const raw = input.acknowledgedAt.trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+      // Noon PT-ish as UTC+7 offset approximation: store as date-only noon UTC for stable display.
+      acknowledgedAt = `${raw}T12:00:00.000Z`;
+    } else {
+      const d = new Date(raw);
+      if (!Number.isNaN(d.getTime())) acknowledgedAt = d.toISOString();
+    }
+  }
+  const nowIso = new Date().toISOString();
+  const note = (input.externalNote || "").trim();
+  const ack: PolicyAck = {
+    email,
+    acknowledgedAt,
+    policyVersion: POLICY_VERSION,
+    printedName: input.printedName.trim(),
+    signatureDataUrl: "",
+    source: "admin_external",
+    externalNote: note || undefined,
+    overriddenBy: input.adminEmail.toLowerCase(),
+    overriddenAt: nowIso,
+  };
+  await env.EV_STORE.put(`ack:${email}`, JSON.stringify(ack));
+  return ack;
+}
+
+export async function deletePolicyAck(env: Env, email: string): Promise<boolean> {
+  const key = `ack:${email.toLowerCase()}`;
+  const existing = await env.EV_STORE.get(key);
+  if (existing == null) return false;
+  await env.EV_STORE.delete(key);
+  return true;
 }
 
 export async function listPolicyAcks(env: Env): Promise<PolicyAck[]> {

@@ -57,11 +57,18 @@ async function loadReservations() {
       if (r.needsPolicyAck) flags.push('<span class="badge needs-sig">Needs policy signature</span>');
       if (r.source === "outlook") flags.push('<span class="badge outlook">From Outlook</span>');
       if (r.unknownPerson) flags.push('<span class="badge needs-sig">Unsigned / unknown</span>');
+      const actions = [];
+      if (canRelease) actions.push(`<button class="btn btn-danger" data-release="${r.id}">Release</button>`);
+      if (r.needsPolicyAck && !r.unknownPerson && r.email && !String(r.email).includes("@imported.local")) {
+        actions.push(
+          `<button type="button" class="btn btn-ghost" data-external-ack="${esc(r.email)}" data-external-name="${esc(r.displayName || "")}">Mark signed externally</button>`
+        );
+      }
       return `<tr>
         <td>${r.date} ${r.startHm}–${r.endHm}<br><span class="sub">${r.weekday}${r.releasable ? " · grace elapsed" : ""}</span></td>
         <td>${who}<br>Spot ${r.spot}</td>
         <td><span class="badge ${r.status}">${r.status.replace(/_/g, " ")}</span> ${flags.join(" ")}</td>
-        <td>${canRelease ? `<button class="btn btn-danger" data-release="${r.id}">Release</button>` : "—"}</td>
+        <td>${actions.length ? actions.join(" ") : "—"}</td>
       </tr>`;
     })
     .join("");
@@ -80,23 +87,38 @@ async function loadAcks() {
   const body = $("ack-body");
   showMsg($("ack-msg"), "");
   if (!data.acks.length) {
-    body.innerHTML = `<tr><td colspan="6">No acknowledgments yet.</td></tr>`;
+    body.innerHTML = `<tr><td colspan="7">No acknowledgments yet.</td></tr>`;
     return;
   }
   body.innerHTML = data.acks
     .map((a) => {
       const name = a.printedName ? esc(a.printedName) : "<em>missing</em>";
-      const complete =
-        a.printedName &&
+      const external = a.source === "admin_external";
+      const inAppSig =
+        !external &&
         a.signatureDataUrl &&
         String(a.signatureDataUrl).startsWith("data:image/");
-      const sig = complete
-        ? `<img class="sig-preview" src="${esc(a.signatureDataUrl)}" alt="Signature">`
-        : "<em>missing</em>";
-      const download = complete
+      let sig;
+      if (external) {
+        const note = a.externalNote
+          ? `<br><span class="sub">${esc(a.externalNote)}</span>`
+          : "";
+        const by = a.overriddenBy
+          ? `<br><span class="sub">Recorded by ${esc(a.overriddenBy)}</span>`
+          : "";
+        sig = `<span class="badge external">External / admin override</span>${note}${by}`;
+      } else if (inAppSig) {
+        sig = `<img class="sig-preview" src="${esc(a.signatureDataUrl)}" alt="Signature">`;
+      } else {
+        sig = "<em>missing</em>";
+      }
+      const download = inAppSig
         ? `<button type="button" class="btn btn-ghost" data-download-pdf="${esc(a.email)}">Download signed PDF</button>`
-        : "—";
-      return `<tr><td>${esc(a.email)}</td><td>${name}</td><td>${sig}</td><td>${esc(a.acknowledgedAt)}</td><td>${esc(a.policyVersion)}</td><td>${download}</td></tr>`;
+        : external
+          ? `<span class="sub">External copy</span>`
+          : "—";
+      const revoke = `<button type="button" class="btn btn-danger" data-revoke-ack="${esc(a.email)}">Revoke</button>`;
+      return `<tr><td>${esc(a.email)}</td><td>${name}</td><td>${sig}</td><td>${esc(a.acknowledgedAt)}</td><td>${esc(a.policyVersion)}</td><td>${download}</td><td>${revoke}</td></tr>`;
     })
     .join("");
 }
@@ -183,6 +205,52 @@ document.addEventListener("click", async (e) => {
     return;
   }
 
+  const revokeEmail = t.getAttribute("data-revoke-ack");
+  if (revokeEmail) {
+    if (
+      !confirm(
+        "Revoke the signed policy for " +
+          revokeEmail +
+          "?\n\nThey will need to sign again (or get an external override) before reserving."
+      )
+    ) {
+      return;
+    }
+    const note = prompt("Optional note (why revoked — e.g. new policy version):", "") || "";
+    t.disabled = true;
+    try {
+      await api("/api/admin/policy-acks/revoke", {
+        method: "POST",
+        body: JSON.stringify({ email: revokeEmail, note: note.trim() }),
+      });
+      showMsg($("ack-msg"), "Revoked. They must re-sign before reserving.", "ok");
+      await loadAcks();
+      await loadReservations().catch(() => {});
+    } catch (err) {
+      showMsg($("ack-msg"), err.message, "error");
+    } finally {
+      t.disabled = false;
+    }
+    return;
+  }
+
+  const extEmail = t.getAttribute("data-external-ack");
+  if (extEmail) {
+    document.querySelectorAll(".tabs button").forEach((b) => b.classList.remove("active"));
+    const ackTab = document.querySelector('.tabs button[data-tab="acks"]');
+    if (ackTab) ackTab.classList.add("active");
+    document.querySelectorAll(".tab-panel").forEach((p) => {
+      p.hidden = p.id !== "panel-acks";
+    });
+    $("ext-email").value = extEmail;
+    const nm = t.getAttribute("data-external-name") || "";
+    if (nm && !nm.includes("@")) $("ext-name").value = nm;
+    $("ext-name").focus();
+    loadAcks().catch(() => {});
+    showMsg($("ext-ack-msg"), "Confirm printed name and optional note, then submit.", "info");
+    return;
+  }
+
   const id = t.getAttribute("data-release");
   if (!id) return;
   if (!confirm("Release this stall? (Counts as company cancel — does not consume charging day.)")) return;
@@ -248,6 +316,30 @@ $("flags-form").addEventListener("submit", async (e) => {
   }
 });
 
+
+$("external-ack-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  try {
+    const payload = {
+      email: $("ext-email").value.trim(),
+      printedName: $("ext-name").value.trim(),
+      externalNote: $("ext-note").value.trim(),
+    };
+    const d = $("ext-date").value;
+    if (d) payload.acknowledgedAt = d;
+    await api("/api/admin/policy-acks/external", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    showMsg($("ext-ack-msg"), "Recorded as external / admin override. They can reserve without the in-app pad.", "ok");
+    $("ext-note").value = "";
+    $("ext-date").value = "";
+    await loadAcks();
+    await loadReservations().catch(() => {});
+  } catch (err) {
+    showMsg($("ext-ack-msg"), err.message, "error");
+  }
+});
 
 async function loadAdmins() {
   const data = await api("/api/admin/admins");

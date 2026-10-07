@@ -22,7 +22,7 @@ Policy source: `public/BOXABL-EV-Charging-Policy.pdf` (copied from the company P
 | Grace | **15 minutes** after start → marked releasable; admin can release anytime |
 | Cancel / I’m done | Frees the stall early |
 | First book | Policy checkbox + **printed name** + **drawn signature** + stored ack (email, name, signature PNG, timestamp, version `2026-onsite-ev-v3` on new signs) |
-| Admin | Built-in `ADMIN_EMAILS` seed ∪ KV extras (Admins tab) — list, release, override, flags, policy acks, **download signed PDF**, add/remove extra admins |
+| Admin | Built-in `ADMIN_EMAILS` seed ∪ KV extras (Admins tab) — list, release, override, flags, policy acks, **download signed PDF**, **external override** / **revoke** ack, add/remove extra admins |
 
 **Not modeled yet:** company holiday calendar (weekends only); founder/exec priority bump workflow.
 
@@ -57,7 +57,9 @@ Two-way sync with room mailbox **`cs1@boxabl.com`** (`OUTLOOK_ROOM_EMAIL`), disp
 - Admins can also **Pull from Outlook now** on the Admin reservations tab (`POST /api/admin/outlook-sync`).
 - New room events become app reservations (`source: outlook`), keep the stall blocked on the day board, and store `outlookEventId` / `iCalUId`.
 - Person mapping: organizer/attendee `@boxabl.com`, else match subject to a known policy printed name, else **unknown** (`outlook-unknown+…@imported.local`) with display name = subject.
-- **Needs policy signature:** if the mapped person has no complete app ack (name + signature), the reservation is flagged `needsPolicyAck`. Employee sees a banner + ack form; admin sees **Needs policy signature** (and **Unsigned / unknown** when unmapped). Outlook booking alone never counts as signed — they must complete the app ack (stamped PDF email path).
+- **Needs policy signature:** if the mapped person has no complete ack (in-app name + signature, **or** admin external override), the reservation is flagged `needsPolicyAck`. Employee sees a banner + ack form; admin sees **Needs policy signature** (and **Unsigned / unknown** when unmapped). Outlook booking alone never counts as signed — they must complete the app ack **or** an admin records that their signed copy was indexed outside this app (**Policy acks → Mark as signed externally**, or **Mark signed externally** on the reservation row).
+- **External / admin override:** `POST /api/admin/policy-acks/external` with employee `@boxabl.com` email, printed name (required), optional note/link, optional signed date. Stores `source: "admin_external"` (no signature pad). Clears `needsPolicyAck`. Does **not** email a stamped PDF. Admin list shows badge **External / admin override**.
+- **Revoke ack:** `POST /api/admin/policy-acks/revoke` with `{ email, note? }`. Deletes the ack; active bookings get `needsPolicyAck` again; employee must re-sign (or get a new external override). Confirm in Admin UI before revoke.
 - Removed Outlook events cancel the linked app reservation (company cancel).
 
 ### Stub vs Graph
@@ -152,7 +154,9 @@ Local KV uses Wrangler’s miniflare preview automatically (placeholder ids in `
 | `POST` | `/api/admin/override` | Admin book bypassing cadence |
 | `GET`/`POST` | `/api/admin/flags` | Contractor / hours / cadence flags |
 | `GET` | `/api/admin/policy-acks` | Ack list |
-| `GET` | `/api/admin/policy-acks/:email/signed-pdf` | Download stamped policy PDF (admin; URL-encode email) |
+| `POST` | `/api/admin/policy-acks/external` | Admin: record external signed copy (`email`, `printedName`, optional `externalNote`, `acknowledgedAt`) |
+| `POST` | `/api/admin/policy-acks/revoke` | Admin: revoke ack (`email`, optional `note`) — employee must re-sign |
+| `GET` | `/api/admin/policy-acks/:email/signed-pdf` | Download stamped policy PDF (admin; in-app signatures only; URL-encode email) |
 | `GET` | `/api/admin/admins` | List built-in seed + KV extras |
 | `POST` | `/api/admin/admins` | `{ email }` add `@boxabl.com` extra admin |
 | `POST` | `/api/admin/admins/remove` | `{ email }` remove KV extra (not built-in) |

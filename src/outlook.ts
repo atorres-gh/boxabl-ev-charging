@@ -692,3 +692,18 @@ export async function clearNeedsPolicyAckForEmail(env: Env, email: string): Prom
     await putReservation(env, r);
   }
 }
+
+/** Set needsPolicyAck on active reservations after an admin revokes their ack. */
+export async function flagNeedsPolicyAckForEmail(env: Env, email: string): Promise<void> {
+  const list = await listAllReservations(env, 500);
+  const e = email.toLowerCase();
+  const nowIso = new Date().toISOString();
+  for (const r of list) {
+    if (r.email.toLowerCase() !== e) continue;
+    if (r.status !== "booked" && r.status !== "admin_override") continue;
+    if (r.needsPolicyAck) continue;
+    r.needsPolicyAck = true;
+    r.updatedAt = nowIso;
+    await putReservation(env, r);
+  }
+}
