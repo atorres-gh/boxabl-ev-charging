@@ -22,7 +22,7 @@ Policy source: `public/BOXABL-EV-Charging-Policy.pdf` (copied from the company P
 | Grace | **15 minutes** after start → marked releasable; admin can release anytime |
 | Cancel / I’m done | Frees the stall early |
 | First book | Policy checkbox + **printed name** + **drawn signature** + stored ack (email, name, signature PNG, timestamp, version `2026-onsite-ev-v3` on new signs) |
-| Admin | `ADMIN_EMAILS` comma list — list, release, override, flags, policy acks |
+| Admin | `ADMIN_EMAILS` comma list — list, release, override, flags, policy acks, **download signed PDF** |
 
 **Not modeled yet:** company holiday calendar (weekends only); founder/exec priority bump workflow; Outlook room resource sync (this app replaces Outlook booking for the MVP).
 
@@ -32,7 +32,7 @@ Every successful policy acknowledgment (standalone `POST /api/policy-ack` or fir
 
 - Subject: `EV charging policy signed — {printedName}`
 - Body: signer email, printed name, signed-at (PT), policy version, app link.
-- **Attachment:** signed policy PDF = company policy + an **Acknowledgment** page with printed name, drawn signature image, date (PT), work email, and policy version. Filename like `BOXABL-EV-Charging-Policy-signed-{name}-{ymd}.pdf`. PDF is built at send time from the stored name/signature (not re-stored in KV).
+- **Attachment:** signed policy PDF = company policy + an **Acknowledgment** page with printed name, drawn signature image, date (PT), work email, and policy version. Filename like `BOXABL-EV-Charging-Policy-signed-{name}-{ymd}.pdf`. PDF is built at send time from the stored name/signature (not re-stored in KV). Admins can also **Download signed PDF** from the Policy acks tab (same rebuild).
 - New acks store version `2026-onsite-ev-v3`. Existing complete name+signature acks stay complete (no forced re-sign).
 - `MAIL_PROVIDER=stub` (current workers.dev): logs subject/to/body and `[mail:stub] policy-ack signed PDF …` with filename + byte length; ack still succeeds.
 - `MAIL_PROVIDER=graph`: Outlook sendMail with `#microsoft.graph.fileAttachment` (`contentBytes` base64). Mail failure never blocks the ack.
@@ -104,6 +104,7 @@ Local KV uses Wrangler’s miniflare preview automatically (placeholder ids in `
 | `POST` | `/api/admin/override` | Admin book bypassing cadence |
 | `GET`/`POST` | `/api/admin/flags` | Contractor / hours / cadence flags |
 | `GET` | `/api/admin/policy-acks` | Ack list |
+| `GET` | `/api/admin/policy-acks/:email/signed-pdf` | Download stamped policy PDF (admin; URL-encode email) |
 
 ## Deploy (when company Cloudflare is ready)
 

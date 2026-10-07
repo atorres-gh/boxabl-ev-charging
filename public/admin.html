@@ -121,14 +121,16 @@
 
     <section class="card tab-panel" id="panel-acks" hidden>
       <h2>Policy acknowledgments</h2>
+      <p class="lede">Download rebuilds the same stamped policy PDF we email (company policy + Acknowledgment page).</p>
       <div class="table-wrap">
         <table>
           <thead>
-            <tr><th>Email</th><th>Printed name</th><th>Signature</th><th>Acknowledged (UTC)</th><th>Version</th></tr>
+            <tr><th>Email</th><th>Printed name</th><th>Signature</th><th>Acknowledged (UTC)</th><th>Version</th><th>Signed PDF</th></tr>
           </thead>
-          <tbody id="ack-body"><tr><td colspan="5">Loading…</td></tr></tbody>
+          <tbody id="ack-body"><tr><td colspan="6">Loading…</td></tr></tbody>
         </table>
       </div>
+      <div class="msg" id="ack-msg" role="status"></div>
     </section>
   </main>
   <script src="/admin.js"></script>

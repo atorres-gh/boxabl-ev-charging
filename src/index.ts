@@ -1,7 +1,11 @@
 import type { Env } from "./env";
 import { adminEmails, isAdmin, stationName, timezone } from "./env";
 import { createMailSender } from "./mail";
-import { createSignedPolicyAttachment } from "./signed-policy-pdf";
+import {
+  buildSignedPolicyPdf,
+  createSignedPolicyAttachment,
+  loadBlankPolicyPdf,
+} from "./signed-policy-pdf";
 import { assertAllowedEmail, issueOtp, normalizeEmail, verifyOtp } from "./otp";
 import { createSession, destroySession, readSession } from "./session";
 import {
@@ -96,6 +100,16 @@ export default {
           if (path === "/api/admin/policy-acks" && request.method === "GET") {
             const acks = await listPolicyAcks(env);
             return json({ ok: true, acks });
+          }
+          const signedPdfMatch = /^\/api\/admin\/policy-acks\/([^/]+)\/signed-pdf$/.exec(path);
+          if (signedPdfMatch && request.method === "GET") {
+            let emailParam = signedPdfMatch[1];
+            try {
+              emailParam = decodeURIComponent(emailParam);
+            } catch {
+              /* keep raw */
+            }
+            return await handleAdminSignedPdf(request, env, emailParam);
           }
           const releaseMatch = /^\/api\/admin\/reservations\/([^/]+)\/release$/.exec(path);
           if (releaseMatch && request.method === "POST") {
@@ -227,6 +241,42 @@ function handleConfig(env: Env, email: string): Response {
   });
 }
 
+
+async function handleAdminSignedPdf(
+  request: Request,
+  env: Env,
+  emailRaw: string
+): Promise<Response> {
+  const email = normalizeEmail(emailRaw);
+  if (!email) return json({ error: "Invalid email." }, 400);
+  const ack = await getPolicyAck(env, email);
+  if (!isCompletePolicyAck(ack)) {
+    return json({ error: "No complete signed policy for that email." }, 404);
+  }
+  try {
+    const origin = new URL(request.url).origin;
+    const blank = await loadBlankPolicyPdf(env, origin);
+    const signed = await buildSignedPolicyPdf(blank, {
+      printedName: ack!.printedName,
+      signatureDataUrl: ack!.signatureDataUrl,
+      signerEmail: ack!.email,
+      acknowledgedAtIso: ack!.acknowledgedAt,
+      policyVersion: ack!.policyVersion,
+    });
+    return new Response(signed.bytes, {
+      status: 200,
+      headers: {
+        "Content-Type": "application/pdf",
+        "Content-Disposition": `attachment; filename="${signed.filename}"`,
+        "Cache-Control": "no-store",
+      },
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Could not build signed PDF.";
+    console.error("[admin] signed PDF download failed", err);
+    return json({ error: message }, 500);
+  }
+}
 
 const POLICY_ALERT_ALWAYS = "alexis.t@boxabl.com";
 

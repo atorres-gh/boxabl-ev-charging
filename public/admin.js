@@ -70,18 +70,25 @@ function esc(s) {
 async function loadAcks() {
   const data = await api("/api/admin/policy-acks");
   const body = $("ack-body");
+  showMsg($("ack-msg"), "");
   if (!data.acks.length) {
-    body.innerHTML = `<tr><td colspan="5">No acknowledgments yet.</td></tr>`;
+    body.innerHTML = `<tr><td colspan="6">No acknowledgments yet.</td></tr>`;
     return;
   }
   body.innerHTML = data.acks
     .map((a) => {
       const name = a.printedName ? esc(a.printedName) : "<em>missing</em>";
-      const sig =
-        a.signatureDataUrl && String(a.signatureDataUrl).startsWith("data:image/")
-          ? `<img class="sig-preview" src="${esc(a.signatureDataUrl)}" alt="Signature">`
-          : "<em>missing</em>";
-      return `<tr><td>${esc(a.email)}</td><td>${name}</td><td>${sig}</td><td>${esc(a.acknowledgedAt)}</td><td>${esc(a.policyVersion)}</td></tr>`;
+      const complete =
+        a.printedName &&
+        a.signatureDataUrl &&
+        String(a.signatureDataUrl).startsWith("data:image/");
+      const sig = complete
+        ? `<img class="sig-preview" src="${esc(a.signatureDataUrl)}" alt="Signature">`
+        : "<em>missing</em>";
+      const download = complete
+        ? `<button type="button" class="btn btn-ghost" data-download-pdf="${esc(a.email)}">Download signed PDF</button>`
+        : "—";
+      return `<tr><td>${esc(a.email)}</td><td>${name}</td><td>${sig}</td><td>${esc(a.acknowledgedAt)}</td><td>${esc(a.policyVersion)}</td><td>${download}</td></tr>`;
     })
     .join("");
 }
@@ -93,6 +100,47 @@ $("btn-reload").addEventListener("click", () => {
 document.addEventListener("click", async (e) => {
   const t = e.target;
   if (!(t instanceof HTMLElement)) return;
+
+  const downloadEmail = t.getAttribute("data-download-pdf");
+  if (downloadEmail) {
+    t.disabled = true;
+    try {
+      const res = await fetch(
+        "/api/admin/policy-acks/" + encodeURIComponent(downloadEmail) + "/signed-pdf",
+        { credentials: "same-origin" }
+      );
+      if (res.status === 401) {
+        location.href = "/";
+        return;
+      }
+      if (res.status === 403) {
+        location.href = "/app.html";
+        return;
+      }
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Download failed.");
+      }
+      const blob = await res.blob();
+      const cd = res.headers.get("Content-Disposition") || "";
+      const m = /filename="([^"]+)"/.exec(cd);
+      const filename = m ? m[1] : "signed-policy.pdf";
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(a.href);
+      showMsg($("ack-msg"), "Downloaded " + filename, "ok");
+    } catch (err) {
+      showMsg($("ack-msg"), err.message, "error");
+    } finally {
+      t.disabled = false;
+    }
+    return;
+  }
+
   const id = t.getAttribute("data-release");
   if (!id) return;
   if (!confirm("Release this stall? (Counts as company cancel — does not consume charging day.)")) return;
