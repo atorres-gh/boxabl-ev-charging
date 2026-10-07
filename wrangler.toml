@@ -38,6 +38,9 @@ CLOSE_HOUR = "18"
 TIMEZONE = "America/Los_Angeles"
 # Built-in admin seed (comma-separated). Extra admins via Admin UI → KV. Override locally via .dev.vars.
 ADMIN_EMAILS = "office.manager@boxabl.com,alexis.torres@boxabl.com,alexis.t@boxabl.com"
+OUTLOOK_SYNC = "stub"
+OUTLOOK_ROOM_EMAIL = "cs1@boxabl.com"
+OUTLOOK_ROOM_NAME = "F1 - Charge Station"
 
 # Secrets (set via wrangler secret put — never commit):
 #   SESSION_SECRET          — long random string for signing session cookies
@@ -46,3 +49,10 @@ ADMIN_EMAILS = "office.manager@boxabl.com,alexis.torres@boxabl.com,alexis.t@boxa
 #   GRAPH_CLIENT_ID         — app registration client id
 #   GRAPH_CLIENT_SECRET     — app registration client secret
 #   GRAPH_SENDER            — mailbox UPN/object that sends mail (Mail.Send)
+# Outlook calendar (OUTLOOK_SYNC=graph) reuses GRAPH_* secrets.
+# Needs application permission Calendars.ReadWrite on room cs1@boxabl.com
+# (or Exchange impersonation / resource mailbox access).
+
+# Outlook → App reconcile (calendarView). Every 5 minutes.
+[triggers]
+crons = ["*/5 * * * *"]

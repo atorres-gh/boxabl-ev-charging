@@ -30,6 +30,11 @@ export interface Env {
   GRAPH_CLIENT_SECRET?: string;
   GRAPH_SENDER?: string;
 
+  /** Outlook room calendar sync (OUTLOOK_SYNC=stub|graph). */
+  OUTLOOK_SYNC?: string;
+  OUTLOOK_ROOM_EMAIL?: string;
+  OUTLOOK_ROOM_NAME?: string;
+
   SMTP_HOST?: string;
   SMTP_USER?: string;
   SMTP_PASS?: string;

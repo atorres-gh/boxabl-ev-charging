@@ -24,7 +24,9 @@ Policy source: `public/BOXABL-EV-Charging-Policy.pdf` (copied from the company P
 | First book | Policy checkbox + **printed name** + **drawn signature** + stored ack (email, name, signature PNG, timestamp, version `2026-onsite-ev-v3` on new signs) |
 | Admin | Built-in `ADMIN_EMAILS` seed ∪ KV extras (Admins tab) — list, release, override, flags, policy acks, **download signed PDF**, add/remove extra admins |
 
-**Not modeled yet:** company holiday calendar (weekends only); founder/exec priority bump workflow; Outlook room resource sync (this app replaces Outlook booking for the MVP).
+**Not modeled yet:** company holiday calendar (weekends only); founder/exec priority bump workflow.
+
+**Outlook room sync (live code, stub by default):** two-way with **cs1@boxabl.com** (display **F1 - Charge Station**). See below.
 
 ## Policy sign alerts
 
@@ -37,6 +39,40 @@ Every successful policy acknowledgment (standalone `POST /api/policy-ack` or fir
 - `MAIL_PROVIDER=stub` (current workers.dev): logs subject/to/body and `[mail:stub] policy-ack signed PDF …` with filename + byte length; ack still succeeds.
 - `MAIL_PROVIDER=graph`: Outlook sendMail with `#microsoft.graph.fileAttachment` (`contentBytes` base64). Mail failure never blocks the ack.
 
+
+
+## Outlook room sync (F1 - Charge Station)
+
+Two-way sync with room mailbox **`cs1@boxabl.com`** (`OUTLOOK_ROOM_EMAIL`), display name **F1 - Charge Station**.
+
+### Policy event format (App → Outlook)
+- **Subject:** employee’s printed name (from policy ack); else Title Case from email local-part
+- **Location:** `F1 - Charge Station`
+- **No Teams** meeting
+- Start/end = reservation window in `America/Los_Angeles`
+- Create/update on reserve (and admin override); **delete** on cancel / I’m done / admin release
+
+### Outlook → App
+- **Cron every 5 minutes** (`[triggers] crons`) runs a **calendarView** reconcile for today … +14 days (chosen over Graph change-notification webhooks — simpler on Workers; no subscription renewal).
+- Admins can also **Pull from Outlook now** on the Admin reservations tab (`POST /api/admin/outlook-sync`).
+- New room events become app reservations (`source: outlook`), keep the stall blocked on the day board, and store `outlookEventId` / `iCalUId`.
+- Person mapping: organizer/attendee `@boxabl.com`, else match subject to a known policy printed name, else **unknown** (`outlook-unknown+…@imported.local`) with display name = subject.
+- **Needs policy signature:** if the mapped person has no complete app ack (name + signature), the reservation is flagged `needsPolicyAck`. Employee sees a banner + ack form; admin sees **Needs policy signature** (and **Unsigned / unknown** when unmapped). Outlook booking alone never counts as signed — they must complete the app ack (stamped PDF email path).
+- Removed Outlook events cancel the linked app reservation (company cancel).
+
+### Stub vs Graph
+| `OUTLOOK_SYNC` | Behavior |
+|----------------|----------|
+| `stub` (default) | Logs create/update/delete/list; reservations still succeed; cron no-ops remote |
+| `graph` | Uses `GRAPH_TENANT_ID` / `GRAPH_CLIENT_ID` / `GRAPH_CLIENT_SECRET` to read/write the room calendar. Needs app permission **Calendars.ReadWrite** (application) on `cs1@boxabl.com`. |
+
+Sync is **best-effort** (same idea as policy-ack mail): Outlook failure never blocks a successful reserve/cancel in the app.
+
+### Turn on Graph calendar
+1. Entra app registration: application permission `Calendars.ReadWrite` (admin consent); ensure access to room mailbox `cs1@boxabl.com`.
+2. `wrangler secret put GRAPH_TENANT_ID` / `GRAPH_CLIENT_ID` / `GRAPH_CLIENT_SECRET` (same secrets as mail).
+3. Set `OUTLOOK_SYNC = "graph"` in `wrangler.toml` `[vars]` (and optionally `MAIL_PROVIDER = "graph"`).
+4. `npm run deploy`. Smoke: reserve in app → event on cs1; create event on cs1 → Admin **Pull from Outlook** → day board + Needs policy signature if unsigned.
 
 ## Admins (seed ∪ extras)
 
@@ -65,6 +101,8 @@ src/
   time.ts            America/Los_Angeles helpers
   store.ts           KV reservations + acks + flags
   signed-policy-pdf.ts  Stamp name/signature/date onto policy PDF
+  outlook.ts         Room calendar two-way sync (stub|graph)
+  graph.ts           Shared Graph token helper
   eligibility.ts     Cadence, hours, spots, grace
 public/
   index.html         Sign-in
@@ -135,9 +173,9 @@ Local KV uses Wrangler’s miniflare preview automatically (placeholder ids in `
    npx wrangler secret put GRAPH_SENDER
    ```
 
-4. Set `MAIL_PROVIDER = "graph"` in `wrangler.toml` (or keep `stub` for smoke).
+4. Set `MAIL_PROVIDER = "graph"` and/or `OUTLOOK_SYNC = "graph"` when secrets are ready (or keep stub for smoke).
 5. `npm run deploy`
-6. Attach hostname when Boss picks the URL. **Do not** create a GitHub remote here — Boss opens an empty repo later.
+6. Attach hostname when Boss picks the URL. Repo: https://github.com/atorres-gh/boxabl-ev-charging
 
 ## Env / vars
 
@@ -151,7 +189,10 @@ Local KV uses Wrangler’s miniflare preview automatically (placeholder ids in `
 | `MAX_SESSION_HOURS` / `BOOK_AHEAD_DAYS` / `GRACE_MINUTES` | vars | Policy knobs |
 | `OPEN_HOUR` / `CLOSE_HOUR` / `TIMEZONE` | vars | `6` / `18` / `America/Los_Angeles` |
 | `MAIL_PROVIDER` | vars | `stub` \| `graph` |
-| `GRAPH_*` | secrets | Live OTP mail |
+| `GRAPH_*` | secrets | Live OTP mail + Outlook calendar |
+| `OUTLOOK_SYNC` | vars | `stub` \| `graph` (default stub) |
+| `OUTLOOK_ROOM_EMAIL` | vars | Default `cs1@boxabl.com` |
+| `OUTLOOK_ROOM_NAME` | vars | Default `F1 - Charge Station` |
 
 ## Shan handoff — open gaps
 
@@ -159,5 +200,5 @@ Local KV uses Wrangler’s miniflare preview automatically (placeholder ids in `
 2. Graph mail (or approved SMTP) for production OTP.
 3. Holiday calendar if OM wants holidays treated like weekends.
 4. Founder/exec priority “bump” notifications (email/Teams) — not in MVP.
-5. Optional sync or sunset of Outlook **F1 - Charge Station** room resource.
-6. Boss creates empty GitHub repo; push when ready (no remote in this scaffold).
+5. Enable `OUTLOOK_SYNC=graph` (+ Calendars.ReadWrite on cs1) when Graph secrets are ready; stub is live now.
+6. GitHub: https://github.com/atorres-gh/boxabl-ev-charging

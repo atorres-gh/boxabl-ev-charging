@@ -50,10 +50,17 @@ async function loadReservations() {
   body.innerHTML = data.reservations
     .map((r) => {
       const canRelease = r.status === "booked" || r.status === "admin_override";
+      const who = r.displayName
+        ? `${esc(r.displayName)}${r.unknownPerson ? " <em>(unknown)</em>" : ""}<br><span class="sub">${esc(r.email)}</span>`
+        : esc(r.email);
+      const flags = [];
+      if (r.needsPolicyAck) flags.push('<span class="badge needs-sig">Needs policy signature</span>');
+      if (r.source === "outlook") flags.push('<span class="badge outlook">From Outlook</span>');
+      if (r.unknownPerson) flags.push('<span class="badge needs-sig">Unsigned / unknown</span>');
       return `<tr>
         <td>${r.date} ${r.startHm}–${r.endHm}<br><span class="sub">${r.weekday}${r.releasable ? " · grace elapsed" : ""}</span></td>
-        <td>${r.email}<br>Spot ${r.spot}</td>
-        <td><span class="badge ${r.status}">${r.status.replace(/_/g, " ")}</span></td>
+        <td>${who}<br>Spot ${r.spot}</td>
+        <td><span class="badge ${r.status}">${r.status.replace(/_/g, " ")}</span> ${flags.join(" ")}</td>
         <td>${canRelease ? `<button class="btn btn-danger" data-release="${r.id}">Release</button>` : "—"}</td>
       </tr>`;
     })
@@ -96,6 +103,21 @@ async function loadAcks() {
 
 $("btn-reload").addEventListener("click", () => {
   loadReservations().catch((e) => showMsg($("admin-msg"), e.message, "error"));
+});
+
+$("btn-outlook-sync").addEventListener("click", async () => {
+  showMsg($("admin-msg"), "Pulling from Outlook…", "info");
+  try {
+    const data = await api("/api/admin/outlook-sync", { method: "POST", body: "{}" });
+    showMsg(
+      $("admin-msg"),
+      `Outlook pull (${data.sync}): imported ${data.imported}, updated ${data.updated}, cancelled ${data.cancelled}, flagged ${data.flagged}.`,
+      "ok"
+    );
+    await loadReservations();
+  } catch (e) {
+    showMsg($("admin-msg"), e.message, "error");
+  }
 });
 
 document.addEventListener("click", async (e) => {
@@ -267,6 +289,13 @@ async function boot() {
     return;
   }
   $("who").textContent = me.email;
+  try {
+    const cfg = await api("/api/config");
+    if (cfg.outlook) {
+      $("outlook-status").textContent =
+        `Outlook sync: ${cfg.outlook.sync} · room ${cfg.outlook.roomEmail} (${cfg.outlook.roomName}). Cron pulls every 5 min when live; stub logs only.`;
+    }
+  } catch (_) {}
   await loadReservations();
 }
 

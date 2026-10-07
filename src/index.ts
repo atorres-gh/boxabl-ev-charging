@@ -2,6 +2,16 @@ import type { Env } from "./env";
 import { seedAdminEmails, stationName, timezone } from "./env";
 import { createMailSender } from "./mail";
 import {
+  clearNeedsPolicyAckForEmail,
+  deleteOutlookForReservation,
+  displayNameForEmail,
+  outlookSyncMode,
+  pullOutlookIntoApp,
+  pushReservationToOutlook,
+  roomDisplayName,
+  roomEmail,
+} from "./outlook";
+import {
   buildSignedPolicyPdf,
   createSignedPolicyAttachment,
   loadBlankPolicyPdf,
@@ -37,7 +47,7 @@ import {
 import { parseHmToMinutes, todayYmd } from "./time";
 
 export default {
-  async fetch(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
     const path = url.pathname;
 
@@ -78,7 +88,7 @@ export default {
           return await handleListMine(env, session.email);
         }
         if (path === "/api/reservations" && request.method === "POST") {
-          return await handleCreate(request, env, session.email);
+          return await handleCreate(request, env, session.email, ctx);
         }
         if (path === "/api/day" && request.method === "GET") {
           return await handleDayBoard(url, env);
@@ -86,11 +96,11 @@ export default {
 
         const cancelMatch = /^\/api\/reservations\/([^/]+)\/cancel$/.exec(path);
         if (cancelMatch && request.method === "POST") {
-          return await handleCancel(env, session.email, cancelMatch[1], false);
+          return await handleCancel(env, session.email, cancelMatch[1], false, ctx);
         }
         const doneMatch = /^\/api\/reservations\/([^/]+)\/done$/.exec(path);
         if (doneMatch && request.method === "POST") {
-          return await handleDone(env, session.email, doneMatch[1]);
+          return await handleDone(env, session.email, doneMatch[1], ctx);
         }
 
         // ── Admin ───────────────────────────────────────────
@@ -117,10 +127,10 @@ export default {
           }
           const releaseMatch = /^\/api\/admin\/reservations\/([^/]+)\/release$/.exec(path);
           if (releaseMatch && request.method === "POST") {
-            return await handleAdminRelease(env, session.email, releaseMatch[1]);
+            return await handleAdminRelease(env, session.email, releaseMatch[1], ctx);
           }
           if (path === "/api/admin/override" && request.method === "POST") {
-            return await handleAdminOverride(request, env, session.email);
+            return await handleAdminOverride(request, env, session.email, ctx);
           }
           if (path === "/api/admin/flags" && request.method === "GET") {
             const email = normalizeEmail(url.searchParams.get("email") || "");
@@ -130,6 +140,9 @@ export default {
           }
           if (path === "/api/admin/flags" && request.method === "POST") {
             return await handleAdminFlags(request, env, session.email);
+          }
+          if (path === "/api/admin/outlook-sync" && request.method === "POST") {
+            return await handleAdminOutlookSync(env);
           }
           if (path === "/api/admin/admins" && request.method === "GET") {
             return await handleAdminListAdmins(env);
@@ -152,6 +165,15 @@ export default {
       console.error("[ev]", message);
       return json({ error: "Server error.", detail: message }, 500);
     }
+  },
+
+  /** Outlook → App: calendarView reconcile every cron tick (see wrangler.toml triggers). */
+  async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+    ctx.waitUntil(
+      pullOutlookIntoApp(env).catch((err) => {
+        console.error("[outlook] scheduled pull failed", err);
+      })
+    );
   },
 } satisfies ExportedHandler<Env>;
 
@@ -225,19 +247,31 @@ async function handleLogout(request: Request, env: Env, url: URL): Promise<Respo
 async function handleMe(env: Env, email: string): Promise<Response> {
   const ack = await getPolicyAck(env, email);
   const flags = await getUserFlags(env, email);
-  // Checkbox-only legacy acks (no name/signature) count as incomplete.
+  const complete = isCompletePolicyAck(ack);
+  // Outlook-imported bookings may flag this user until they sign in the app.
+  let needsPolicyAck = !complete;
+  if (complete) {
+    const mine = await listReservationsForUser(env, email);
+    needsPolicyAck = mine.some(
+      (r) =>
+        r.needsPolicyAck &&
+        (r.status === "booked" || r.status === "admin_override")
+    );
+  }
   return json({
     ok: true,
     email,
     admin: await isAdmin(env, email),
-    policyAck: isCompletePolicyAck(ack) ? ack : null,
+    policyAck: complete ? ack : null,
+    needsPolicyAck,
     flags,
   });
 }
 
 async function handleConfig(env: Env, email: string): Promise<Response> {
   const tz = timezone(env);
-  return json({
+  const admin = await isAdmin(env, email);
+  const payload: Record<string, unknown> = {
     ok: true,
     station: stationName(env),
     spotCount: Number(env.SPOT_COUNT) || 1,
@@ -249,9 +283,17 @@ async function handleConfig(env: Env, email: string): Promise<Response> {
     timezone: tz,
     today: todayYmd(tz),
     bookableDates: suggestBookableDates(env),
-    admin: await isAdmin(env, email),
+    admin,
     policyPdf: "/BOXABL-EV-Charging-Policy.pdf",
-  });
+  };
+  if (admin) {
+    payload.outlook = {
+      sync: outlookSyncMode(env),
+      roomEmail: roomEmail(env),
+      roomName: roomDisplayName(env),
+    };
+  }
+  return json(payload);
 }
 
 
@@ -372,6 +414,7 @@ async function handlePolicyAck(request: Request, env: Env, email: string): Promi
   if (v.error) return json({ error: v.error }, 400);
   const ack = await putPolicyAck(env, email, v.printedName!, v.signatureDataUrl!);
   await notifyPolicyAck(env, request, ack);
+  await clearNeedsPolicyAckForEmail(env, email);
   return json({ ok: true, ack });
 }
 
@@ -404,7 +447,12 @@ async function handleDayBoard(url: URL, env: Env): Promise<Response> {
   return json({ ok: true, date, reservations: active });
 }
 
-async function handleCreate(request: Request, env: Env, email: string): Promise<Response> {
+async function handleCreate(
+  request: Request,
+  env: Env,
+  email: string,
+  ctx: ExecutionContext
+): Promise<Response> {
   const body = await readJson(request);
   const date = String(body.date || "");
   const startMin = parseHmToMinutes(String(body.start || body.startHm || ""));
@@ -424,6 +472,7 @@ async function handleCreate(request: Request, env: Env, email: string): Promise<
     }
     const ack = await putPolicyAck(env, email, v.printedName!, v.signatureDataUrl!);
     await notifyPolicyAck(env, request, ack);
+    await clearNeedsPolicyAckForEmail(env, email);
   }
 
   const elig = await evaluateEligibility(env, email, date, startMin, endMin);
@@ -435,9 +484,11 @@ async function handleCreate(request: Request, env: Env, email: string): Promise<
   }
 
   const nowIso = new Date().toISOString();
+  const displayName = await displayNameForEmail(env, email);
   const r: Reservation = {
     id: newReservationId(),
     email,
+    displayName,
     station: stationName(env),
     spot,
     date,
@@ -446,8 +497,11 @@ async function handleCreate(request: Request, env: Env, email: string): Promise<
     status: "booked",
     createdAt: nowIso,
     updatedAt: nowIso,
+    source: "app",
+    needsPolicyAck: false,
   };
   await putReservation(env, r);
+  ctx.waitUntil(pushReservationToOutlook(env, r));
   return json({ ok: true, reservation: enrichReservation(env, r) }, 201);
 }
 
@@ -455,7 +509,8 @@ async function handleCancel(
   env: Env,
   email: string,
   id: string,
-  companyCancel: boolean
+  companyCancel: boolean,
+  ctx: ExecutionContext
 ): Promise<Response> {
   const r = await getReservation(env, id);
   if (!r) return json({ error: "Reservation not found." }, 404);
@@ -471,10 +526,16 @@ async function handleCancel(
   r.updatedAt = nowIso;
   if (companyCancel) r.companyCancel = true;
   await putReservation(env, r);
+  ctx.waitUntil(deleteOutlookForReservation(env, r));
   return json({ ok: true, reservation: enrichReservation(env, r) });
 }
 
-async function handleDone(env: Env, email: string, id: string): Promise<Response> {
+async function handleDone(
+  env: Env,
+  email: string,
+  id: string,
+  ctx: ExecutionContext
+): Promise<Response> {
   const r = await getReservation(env, id);
   if (!r) return json({ error: "Reservation not found." }, 404);
   if (r.email !== email) return json({ error: "You can only end your own session." }, 403);
@@ -486,6 +547,7 @@ async function handleDone(env: Env, email: string, id: string): Promise<Response
   r.completedAt = nowIso;
   r.updatedAt = nowIso;
   await putReservation(env, r);
+  ctx.waitUntil(deleteOutlookForReservation(env, r));
   return json({ ok: true, reservation: enrichReservation(env, r) });
 }
 
@@ -500,7 +562,12 @@ async function handleAdminList(url: URL, env: Env): Promise<Response> {
   });
 }
 
-async function handleAdminRelease(env: Env, adminEmail: string, id: string): Promise<Response> {
+async function handleAdminRelease(
+  env: Env,
+  adminEmail: string,
+  id: string,
+  ctx: ExecutionContext
+): Promise<Response> {
   const r = await getReservation(env, id);
   if (!r) return json({ error: "Reservation not found." }, 404);
   if (r.status !== "booked" && r.status !== "admin_override") {
@@ -517,13 +584,15 @@ async function handleAdminRelease(env: Env, adminEmail: string, id: string): Pro
     .filter(Boolean)
     .join(" · ");
   await putReservation(env, r);
+  ctx.waitUntil(deleteOutlookForReservation(env, r));
   return json({ ok: true, reservation: enrichReservation(env, r), graceElapsed: graceOk });
 }
 
 async function handleAdminOverride(
   request: Request,
   env: Env,
-  adminEmail: string
+  adminEmail: string,
+  ctx: ExecutionContext
 ): Promise<Response> {
   const body = await readJson(request);
   const email = normalizeEmail(String(body.email || ""));
@@ -545,9 +614,12 @@ async function handleAdminOverride(
   }
 
   const nowIso = new Date().toISOString();
+  const displayName = await displayNameForEmail(env, email);
+  const ack = await getPolicyAck(env, email);
   const r: Reservation = {
     id: newReservationId(),
     email,
+    displayName,
     station: stationName(env),
     spot,
     date,
@@ -558,13 +630,28 @@ async function handleAdminOverride(
     updatedAt: nowIso,
     override: true,
     notes: notes || `Override by ${adminEmail}`,
+    source: "app",
+    needsPolicyAck: !isCompletePolicyAck(ack),
   };
   await putReservation(env, r);
+  ctx.waitUntil(pushReservationToOutlook(env, r));
   return json({
     ok: true,
     reservation: enrichReservation(env, r),
     eligibilityNote: elig,
   }, 201);
+}
+
+async function handleAdminOutlookSync(env: Env): Promise<Response> {
+  const mode = outlookSyncMode(env);
+  const stats = await pullOutlookIntoApp(env);
+  return json({
+    ok: true,
+    sync: mode,
+    roomEmail: roomEmail(env),
+    roomName: roomDisplayName(env),
+    ...stats,
+  });
 }
 
 async function handleAdminFlags(

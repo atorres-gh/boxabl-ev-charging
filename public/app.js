@@ -24,6 +24,20 @@ function badge(status) {
   return `<span class="badge ${status}">${status.replace(/_/g, " ")}</span>`;
 }
 
+function whoLabel(r) {
+  const name = (r.displayName || "").trim();
+  if (name && r.unknownPerson) return `${escText(name)} (unknown)`;
+  if (name) return escText(name);
+  return escText(r.email);
+}
+
+function escText(s) {
+  return String(s || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
 function renderItem(r, { mine } = {}) {
   const actions = [];
   if (mine && (r.status === "booked" || r.status === "admin_override")) {
@@ -31,10 +45,12 @@ function renderItem(r, { mine } = {}) {
     actions.push(`<button class="btn btn-danger" data-cancel="${r.id}">Cancel</button>`);
   }
   if (r.releasable) actions.push(`<span class="badge releasable">Grace elapsed — releasable</span>`);
+  if (r.needsPolicyAck) actions.push(`<span class="badge needs-sig">Needs policy signature</span>`);
+  if (r.source === "outlook") actions.push(`<span class="badge outlook">From Outlook</span>`);
   return `<div class="item">
     <div>
       <div class="title">${r.date} (${r.weekday}) · ${r.startHm}–${r.endHm}</div>
-      <div class="sub">${r.email} · Spot ${r.spot} · ${r.station} ${badge(r.status)}</div>
+      <div class="sub">${whoLabel(r)} · Spot ${r.spot} · ${escText(r.station)} ${badge(r.status)}</div>
     </div>
     <div class="actions">${actions.join("")}</div>
   </div>`;
@@ -153,9 +169,16 @@ async function boot() {
   $("who").textContent = me.email;
   $("station-title").textContent = config.station;
   if (me.admin) $("admin-link").hidden = false;
-  if (!me.policyAck) {
+  const flag = $("policy-flag");
+  if (me.needsPolicyAck || !me.policyAck) {
+    flag.hidden = false;
+    flag.textContent = me.policyAck
+      ? "You have an Outlook charging booking on file but still need to sign the policy here (printed name + signature)."
+      : "Please sign the EV charging policy below (printed name + signature) before or with your first reservation. Outlook bookings alone do not count as signed.";
     $("ack-wrap").hidden = false;
     sigPad = initSignaturePad();
+  } else {
+    flag.hidden = true;
   }
 
   const sel = $("date");
@@ -254,6 +277,9 @@ $("reserve-form").addEventListener("submit", async (e) => {
     await api("/api/reservations", { method: "POST", body: JSON.stringify(body) });
     showMsg(msg, "Reserved. Unplug and move when your session ends.", "ok");
     $("ack-wrap").hidden = true;
+    const flag = $("policy-flag");
+    if (flag) flag.hidden = true;
+    me = await api("/api/me");
     await refresh();
   } catch (err) {
     showMsg(msg, err.message, "error");

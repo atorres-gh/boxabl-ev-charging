@@ -13,6 +13,8 @@ export type ReservationStatus =
 export interface Reservation {
   id: string;
   email: string;
+  /** Display name for day board / Outlook subject (printedName or Outlook subject). */
+  displayName?: string;
   station: string;
   spot: number;
   date: Ymd;
@@ -29,6 +31,19 @@ export interface Reservation {
   notes?: string;
   /** Session canceled by company/admin — does not consume charging day. */
   companyCancel?: boolean;
+  /** Graph calendar event id on the room mailbox (cs1). */
+  outlookEventId?: string;
+  /** Graph iCalUId for dedupe across sync. */
+  iCalUId?: string;
+  /** Who created the booking: app UI or imported from Outlook. */
+  source?: "app" | "outlook";
+  /**
+   * Outlook-only (or any) booking where the person has no complete policy ack yet.
+   * Cleared when they complete name + signature in the app.
+   */
+  needsPolicyAck?: boolean;
+  /** Could not map Outlook organizer/attendees to a @boxabl.com user. */
+  unknownPerson?: boolean;
 }
 
 export interface PolicyAck {

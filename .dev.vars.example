@@ -7,3 +7,7 @@ ADMIN_EMAILS=office.manager@boxabl.com
 # GRAPH_CLIENT_ID=
 # GRAPH_CLIENT_SECRET=
 # GRAPH_SENDER=
+# Outlook room sync (default stub). Set OUTLOOK_SYNC=graph with GRAPH_* to go live.
+# OUTLOOK_SYNC=stub
+# OUTLOOK_ROOM_EMAIL=cs1@boxabl.com
+# OUTLOOK_ROOM_NAME=F1 - Charge Station

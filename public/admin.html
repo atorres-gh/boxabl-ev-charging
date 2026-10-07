@@ -40,13 +40,15 @@
 
     <section class="card tab-panel" id="panel-reservations">
       <h2>All reservations</h2>
+      <p class="lede" id="outlook-status">Outlook sync: …</p>
       <div class="form-grid" style="margin-bottom:14px">
         <div class="field">
           <label for="filter-date">Filter by date (optional)</label>
           <input type="date" id="filter-date">
         </div>
-        <div class="field" style="display:flex;align-items:flex-end">
+        <div class="field" style="display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap">
           <button type="button" class="btn" id="btn-reload">Refresh</button>
+          <button type="button" class="btn btn-ghost" id="btn-outlook-sync">Pull from Outlook now</button>
         </div>
       </div>
       <div class="table-wrap">
