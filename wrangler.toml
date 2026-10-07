@@ -37,7 +37,7 @@ OPEN_HOUR = "6"
 CLOSE_HOUR = "18"
 TIMEZONE = "America/Los_Angeles"
 # Office Manager / admin allowlist (comma-separated). Override locally via .dev.vars.
-ADMIN_EMAILS = "office.manager@boxabl.com,alexis.torres@boxabl.com"
+ADMIN_EMAILS = "office.manager@boxabl.com,alexis.torres@boxabl.com,alexis.t@boxabl.com"
 
 # Secrets (set via wrangler secret put — never commit):
 #   SESSION_SECRET          — long random string for signing session cookies
