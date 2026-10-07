@@ -149,12 +149,26 @@
   .preview.show { display: block; }
   .preview strong { letter-spacing: 0.2em; font-size: 1.1rem; }
   .hidden { display: none !important; }
+
+  .signin-brand { margin-bottom: 4px; }
+  .signin-logo {
+    display: block;
+    height: 36px;
+    width: auto;
+    max-width: min(220px, 100%);
+    margin: 0 0 16px;
+  }
+  .signin-brand .eyebrow { margin-bottom: 6px; }
+  .signin-brand h1 { margin-bottom: 6px; }
 </style>
 </head>
 <body>
   <div class="shell">
-    <p class="eyebrow">F1 Charge Station</p>
-    <h1>BOXABL EV Charging</h1>
+    <div class="signin-brand">
+      <img class="signin-logo" src="/boxabl-logo.png" alt="Boxabl" width="200" height="36">
+      <p class="eyebrow">F1 Charge Station</p>
+      <h1>EV Charging</h1>
+    </div>
     <p class="lede">Sign in with your @boxabl.com work email. We send a one-time code — no password.</p>
 
     <form id="form-email">
