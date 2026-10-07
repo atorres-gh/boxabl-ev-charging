@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="BOXABL">
+  <style>
+    /* Near-black to match the logo mark. Flips to white on dark browser
+       chrome so the icon stays legible in a dark tab bar. */
+    .mark { fill: #231F20; }
+    @media (prefers-color-scheme: dark) { .mark { fill: #FFFFFF; } }
+  </style>
+  <!-- House outline: roof peak plus both side walls, open at the base. -->
+  <path class="mark" d="M0 52 L50 0 L100 52 L100 100 L83 100 L83 58 L50 26 L17 58 L17 100 L0 100 Z"/>
+  <!-- Window -->
+  <rect class="mark" x="59" y="57" width="17" height="17"/>
+</svg>

@@ -1,0 +1,48 @@
+# BOXABL EV Charging — Cloudflare Worker (branded OTP, NOT Access)
+# Do not put real secrets here. Use `wrangler secret put` / `.dev.vars` locally.
+
+name = "boxabl-ev-charging"
+main = "src/index.ts"
+compatibility_date = "2026-10-06"
+workers_dev = true
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+# Auth gate must run before static HTML is served.
+run_worker_first = true
+# Prevent /index.html ↔ / and /app.html ↔ /app redirect loops with the page gate.
+html_handling = "none"
+
+# Replace ids after: npm run kv:create  (requires `wrangler login`)
+[[kv_namespaces]]
+binding = "EV_STORE"
+id = "1479f0f0f28040ab8021a27dc54372d0"
+preview_id = "8688b0559e4d4bc89aaabe1517475fdd"
+
+[vars]
+ALLOWED_EMAIL_DOMAIN = "boxabl.com"
+OTP_TTL_SECONDS = "600"
+SESSION_TTL_SECONDS = "43200"
+COOKIE_NAME = "boxabl_ev_session"
+MAIL_PROVIDER = "stub"
+MAIL_FROM = "noreply@boxabl.com"
+MAIL_SUBJECT = "Your BOXABL EV Charging sign-in code"
+STATION_NAME = "F1 Charge Station"
+SPOT_COUNT = "1"
+MAX_SESSION_HOURS = "3"
+BOOK_AHEAD_DAYS = "2"
+GRACE_MINUTES = "15"
+OPEN_HOUR = "6"
+CLOSE_HOUR = "18"
+TIMEZONE = "America/Los_Angeles"
+# Office Manager / admin allowlist (comma-separated). Override locally via .dev.vars.
+ADMIN_EMAILS = "office.manager@boxabl.com,alexis.torres@boxabl.com"
+
+# Secrets (set via wrangler secret put — never commit):
+#   SESSION_SECRET          — long random string for signing session cookies
+#   ADMIN_EMAILS            — optional override of vars (comma list)
+#   GRAPH_TENANT_ID         — Entra tenant (when MAIL_PROVIDER=graph)
+#   GRAPH_CLIENT_ID         — app registration client id
+#   GRAPH_CLIENT_SECRET     — app registration client secret
+#   GRAPH_SENDER            — mailbox UPN/object that sends mail (Mail.Send)

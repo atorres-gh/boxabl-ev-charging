@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BOXABL EV Charging</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body class="app-body">
+  <header class="topbar">
+    <div class="brand"><span class="dot"></span> BOXABL EV Charging</div>
+    <div class="meta">
+      <span id="who"></span>
+      <a class="btn-link" id="admin-link" href="/admin.html" hidden>Office tools</a>
+      <a class="btn-link" href="/api/auth/logout">Sign out</a>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="card">
+      <h1 id="station-title">F1 Charge Station</h1>
+      <p class="lede">Reserve the on-site stall for up to 3 hours on an eligible charging day. Rules follow the company EV charging policy.</p>
+      <ul class="rules">
+        <li>Every other business day (Mon→Wed, Fri→Tue). Weekends do not count.</li>
+        <li>One session per charging day · max 3 hours · book up to 2 days ahead.</li>
+        <li>Hours 6:00–18:00 America/Los_Angeles · 15-minute grace after start.</li>
+        <li>Cancel or tap “I’m done” to free the stall early.</li>
+      </ul>
+      <p class="lede" style="margin-top:12px;margin-bottom:0">
+        <a href="/BOXABL-EV-Charging-Policy.pdf" target="_blank" rel="noopener">Read the full policy (PDF)</a>
+      </p>
+    </section>
+
+    <section class="card">
+      <h2>Reserve a session</h2>
+      <p class="lede" id="elig-hint">Pick a date and time inside business hours.</p>
+      <form id="reserve-form">
+        <div class="form-grid">
+          <div class="field">
+            <label for="date">Date</label>
+            <select id="date" required></select>
+          </div>
+          <div class="field">
+            <label for="spot-info">Spot</label>
+            <input id="spot-info" type="text" value="Auto-assign (1 available)" disabled>
+          </div>
+          <div class="field">
+            <label for="start">Start</label>
+            <input id="start" type="time" value="09:00" min="06:00" max="18:00" required>
+          </div>
+          <div class="field">
+            <label for="end">End</label>
+            <input id="end" type="time" value="12:00" min="06:00" max="18:00" required>
+          </div>
+        </div>
+        <div class="ack-block" id="ack-wrap" hidden>
+          <p class="ack-intro">Before your first reservation, acknowledge the charging policy with your printed name and signature.</p>
+          <label class="checkbox">
+            <input type="checkbox" id="ack">
+            <span>I have read and agree to the <a href="/BOXABL-EV-Charging-Policy.pdf" target="_blank" rel="noopener">On-Site EV Charging Policy</a>.</span>
+          </label>
+          <div class="field ack-field">
+            <label for="printed-name">Printed name</label>
+            <input id="printed-name" type="text" autocomplete="name" maxlength="120" placeholder="Type your full name">
+          </div>
+          <div class="field ack-field">
+            <label for="sig-canvas">Signature</label>
+            <div class="sig-wrap">
+              <canvas id="sig-canvas" width="560" height="160" aria-label="Draw your signature"></canvas>
+            </div>
+            <div class="btn-row sig-actions">
+              <button type="button" class="btn btn-ghost" id="btn-sig-clear">Clear signature</button>
+            </div>
+            <p class="hint">Draw with your mouse or finger. Required once; we save it with your acknowledgment.</p>
+          </div>
+        </div>
+        <div class="btn-row">
+          <button type="button" class="btn btn-ghost" id="btn-check">Check eligibility</button>
+          <button type="submit" class="btn btn-accent" id="btn-reserve">Reserve</button>
+        </div>
+        <div class="msg" id="reserve-msg" role="status"></div>
+      </form>
+    </section>
+
+    <section class="card">
+      <h2>Today at the station</h2>
+      <div class="list" id="day-board"><p class="empty">Loading…</p></div>
+    </section>
+
+    <section class="card">
+      <h2>Your reservations</h2>
+      <div class="list" id="mine"><p class="empty">Loading…</p></div>
+    </section>
+  </main>
+  <script src="/app.js"></script>
+</body>
+</html>

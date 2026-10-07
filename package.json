@@ -1,0 +1,25 @@
+{
+  "name": "boxabl-ev-charging",
+  "version": "0.1.0",
+  "private": true,
+  "description": "BOXABL on-site EV charging reservation — F1 Charge Station",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail",
+    "kv:create": "wrangler kv namespace create EV_STORE && wrangler kv namespace create EV_STORE --preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250906.0",
+    "typescript": "^5.9.2",
+    "wrangler": "4.34.0"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "pdf-lib": "^1.17.1"
+  }
+}

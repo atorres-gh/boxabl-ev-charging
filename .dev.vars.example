@@ -1,0 +1,9 @@
+# Copy to .dev.vars for local `wrangler dev`. Never commit .dev.vars.
+SESSION_SECRET=local-dev-only-change-me-not-for-production
+ADMIN_EMAILS=office.manager@boxabl.com
+# MAIL_PROVIDER is set in wrangler.toml [vars]; stub returns previewCode in JSON.
+# When testing Graph locally, also set:
+# GRAPH_TENANT_ID=
+# GRAPH_CLIENT_ID=
+# GRAPH_CLIENT_SECRET=
+# GRAPH_SENDER=

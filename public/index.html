@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BOXABL EV Charging — Sign in</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #0b1d36;
+    --navy: #184273;
+    --navy-deep: #102c4d;
+    --accent: #ffa400;
+    --fg: #f4f6f8;
+    --muted: #9aabc0;
+    --paper: #f4f1ea;
+    --radius: 16px;
+    --radius-sm: 8px;
+    --font: "Lato", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; }
+  body {
+    font-family: var(--font);
+    background: var(--ink);
+    color: var(--fg);
+    min-height: 100dvh;
+    display: grid;
+    place-items: center;
+    padding: 24px 20px;
+  }
+  .shell {
+    width: min(420px, 100%);
+    background: var(--navy-deep);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: var(--radius);
+    padding: 28px 24px 24px;
+    box-shadow: 0 24px 60px rgba(0,0,0,0.28);
+    position: relative;
+  }
+  .shell::before {
+    content: "";
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 6px;
+    background: var(--accent);
+    border-radius: var(--radius) 0 0 var(--radius);
+  }
+  .eyebrow {
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--accent);
+    font-weight: 700;
+    margin: 0 0 8px;
+  }
+  h1 {
+    font-size: 1.35rem;
+    font-weight: 700;
+    margin: 0 0 6px;
+    line-height: 1.2;
+  }
+  .lede {
+    margin: 0 0 22px;
+    color: var(--muted);
+    font-size: 0.95rem;
+    line-height: 1.5;
+  }
+  label {
+    display: block;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+  input {
+    width: 100%;
+    min-height: 48px;
+    border-radius: var(--radius-sm);
+    border: 1px solid rgba(255,255,255,0.14);
+    background: rgba(11, 29, 54, 0.65);
+    color: var(--fg);
+    font: inherit;
+    font-size: 1rem;
+    padding: 0 14px;
+    outline: none;
+  }
+  input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(255,164,0,0.22);
+  }
+  #gate-code {
+    letter-spacing: 0.4em;
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    text-align: center;
+    font-size: 1.25rem;
+  }
+  button[type="submit"] {
+    width: 100%;
+    min-height: 48px;
+    margin-top: 14px;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: var(--navy);
+    color: var(--paper);
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  button[type="submit"]:hover:not(:disabled) { background: #123056; }
+  button:disabled { opacity: 0.6; cursor: default; }
+  .ghost {
+    display: block;
+    width: 100%;
+    min-height: 44px;
+    margin-top: 10px;
+    border: 0;
+    background: transparent;
+    color: var(--muted);
+    font: inherit;
+    cursor: pointer;
+    text-decoration: underline;
+  }
+  .msg {
+    margin-top: 14px;
+    padding: 10px 12px;
+    border-radius: var(--radius-sm);
+    font-size: 0.9rem;
+    display: none;
+  }
+  .msg.show { display: block; }
+  .msg.error { background: rgba(160,45,45,0.25); color: #f0b4b4; }
+  .msg.ok { background: rgba(255,164,0,0.15); color: var(--accent); }
+  .preview {
+    margin-top: 12px;
+    padding: 10px 12px;
+    border-radius: var(--radius-sm);
+    background: rgba(255,164,0,0.12);
+    color: var(--accent);
+    font-size: 0.9rem;
+    display: none;
+  }
+  .preview.show { display: block; }
+  .preview strong { letter-spacing: 0.2em; font-size: 1.1rem; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+  <div class="shell">
+    <p class="eyebrow">F1 Charge Station</p>
+    <h1>BOXABL EV Charging</h1>
+    <p class="lede">Sign in with your @boxabl.com work email. We send a one-time code — no password.</p>
+
+    <form id="form-email">
+      <label for="gate-email">Work email</label>
+      <input id="gate-email" type="email" autocomplete="email" placeholder="you@boxabl.com" required>
+      <button type="submit" id="btn-request">Send code</button>
+    </form>
+
+    <form id="form-code" class="hidden">
+      <label for="gate-code">6-digit code</label>
+      <input id="gate-code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="••••••" required>
+      <button type="submit" id="btn-verify">Sign in</button>
+      <button type="button" class="ghost" id="btn-back">Use a different email</button>
+    </form>
+
+    <div class="preview" id="preview"></div>
+    <div class="msg" id="msg" role="status"></div>
+  </div>
+<script>
+const $ = (id) => document.getElementById(id);
+let pendingEmail = "";
+
+function showMsg(text, kind) {
+  const el = $("msg");
+  el.textContent = text || "";
+  el.className = "msg" + (text ? " show " + (kind || "") : "");
+}
+
+$("form-email").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const email = $("gate-email").value.trim();
+  showMsg("");
+  $("preview").classList.remove("show");
+  $("btn-request").disabled = true;
+  try {
+    const res = await fetch("/api/auth/request", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Could not send code.");
+    pendingEmail = email;
+    $("form-email").classList.add("hidden");
+    $("form-code").classList.remove("hidden");
+    $("gate-code").focus();
+    if (data.previewCode) {
+      $("preview").innerHTML = "Dev / stub mail — your code is <strong>" + data.previewCode + "</strong>";
+      $("preview").classList.add("show");
+    }
+    showMsg("Code sent. Check your email (or the preview above).", "ok");
+  } catch (err) {
+    showMsg(err.message || "Request failed.", "error");
+  } finally {
+    $("btn-request").disabled = false;
+  }
+});
+
+$("form-code").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  showMsg("");
+  $("btn-verify").disabled = true;
+  try {
+    const res = await fetch("/api/auth/verify", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email: pendingEmail, code: $("gate-code").value.trim() }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "That code did not work.");
+    location.href = data.admin ? "/admin.html" : "/app.html";
+  } catch (err) {
+    showMsg(err.message || "Verify failed.", "error");
+  } finally {
+    $("btn-verify").disabled = false;
+  }
+});
+
+$("btn-back").addEventListener("click", () => {
+  $("form-code").classList.add("hidden");
+  $("form-email").classList.remove("hidden");
+  $("preview").classList.remove("show");
+  showMsg("");
+});
+</script>
+</body>
+</html>

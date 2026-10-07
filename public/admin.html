@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BOXABL EV Charging — Office tools</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body class="app-body">
+  <header class="topbar">
+    <div class="brand"><span class="dot"></span> EV Charging · Office tools</div>
+    <div class="meta">
+      <span id="who"></span>
+      <a class="btn-link" href="/app.html">Employee app</a>
+      <a class="btn-link" href="/api/auth/logout">Sign out</a>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="card">
+      <h1>Office Manager tools</h1>
+      <p class="lede">List reservations, release after grace (or anytime as admin), create overrides, and flag contractor / hours exceptions. Policy PDF: <a href="/BOXABL-EV-Charging-Policy.pdf" target="_blank" rel="noopener">open</a>.</p>
+      <div class="tabs">
+        <button type="button" class="active" data-tab="reservations">Reservations</button>
+        <button type="button" data-tab="override">Override book</button>
+        <button type="button" data-tab="flags">User flags</button>
+        <button type="button" data-tab="acks">Policy acks</button>
+      </div>
+    </section>
+
+    <section class="card tab-panel" id="panel-reservations">
+      <h2>All reservations</h2>
+      <div class="form-grid" style="margin-bottom:14px">
+        <div class="field">
+          <label for="filter-date">Filter by date (optional)</label>
+          <input type="date" id="filter-date">
+        </div>
+        <div class="field" style="display:flex;align-items:flex-end">
+          <button type="button" class="btn" id="btn-reload">Refresh</button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>When</th>
+              <th>Who</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="res-body"><tr><td colspan="4">Loading…</td></tr></tbody>
+        </table>
+      </div>
+      <div class="msg" id="admin-msg" role="status"></div>
+    </section>
+
+    <section class="card tab-panel" id="panel-override" hidden>
+      <h2>Override reservation</h2>
+      <p class="lede">Bypasses cadence / book-ahead checks. Still cannot double-book an overlapping spot.</p>
+      <form id="override-form">
+        <div class="form-grid">
+          <div class="field">
+            <label for="ov-email">Employee email</label>
+            <input id="ov-email" type="email" required placeholder="name@boxabl.com">
+          </div>
+          <div class="field">
+            <label for="ov-date">Date</label>
+            <input id="ov-date" type="date" required>
+          </div>
+          <div class="field">
+            <label for="ov-start">Start</label>
+            <input id="ov-start" type="time" value="09:00" required>
+          </div>
+          <div class="field">
+            <label for="ov-end">End</label>
+            <input id="ov-end" type="time" value="12:00" required>
+          </div>
+        </div>
+        <div class="field" style="margin-top:12px">
+          <label for="ov-notes">Notes</label>
+          <textarea id="ov-notes" placeholder="Reason for override"></textarea>
+        </div>
+        <div class="btn-row">
+          <button type="submit" class="btn btn-accent">Create override</button>
+        </div>
+        <div class="msg" id="ov-msg" role="status"></div>
+      </form>
+    </section>
+
+    <section class="card tab-panel" id="panel-flags" hidden>
+      <h2>User exception flags</h2>
+      <p class="lede">Contractor exceptions allow non-@boxabl.com sign-in once flagged. Hours exception covers overnight/weekend. Cadence exception relaxes every-other-day / 3-hour limits.</p>
+      <form id="flags-form">
+        <div class="form-grid">
+          <div class="field">
+            <label for="fl-email">Email</label>
+            <input id="fl-email" type="email" required>
+          </div>
+          <div class="field" style="display:flex;align-items:flex-end;gap:10px">
+            <button type="button" class="btn btn-ghost" id="btn-load-flags">Load</button>
+          </div>
+        </div>
+        <label class="checkbox"><input type="checkbox" id="fl-contractor"> Contractor exception</label>
+        <label class="checkbox"><input type="checkbox" id="fl-hours"> Hours / weekend / overnight exception</label>
+        <label class="checkbox"><input type="checkbox" id="fl-cadence"> Cadence / session-length exception</label>
+        <div class="field" style="margin-top:12px">
+          <label for="fl-notes">Notes</label>
+          <textarea id="fl-notes"></textarea>
+        </div>
+        <div class="btn-row">
+          <button type="submit" class="btn">Save flags</button>
+        </div>
+        <div class="msg" id="fl-msg" role="status"></div>
+      </form>
+    </section>
+
+    <section class="card tab-panel" id="panel-acks" hidden>
+      <h2>Policy acknowledgments</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Email</th><th>Printed name</th><th>Signature</th><th>Acknowledged (UTC)</th><th>Version</th></tr>
+          </thead>
+          <tbody id="ack-body"><tr><td colspan="5">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+  <script src="/admin.js"></script>
+</body>
+</html>
