@@ -23,12 +23,13 @@
   <main class="wrap">
     <section class="card">
       <h1>Office Manager tools</h1>
-      <p class="lede">List reservations, release after grace (or anytime as admin), create overrides, and flag contractor / hours exceptions. Policy PDF: <a href="/BOXABL-EV-Charging-Policy.pdf" target="_blank" rel="noopener">open</a>.</p>
+      <p class="lede">List reservations, release after grace (or anytime as admin), create overrides, flag exceptions, manage who is an admin, and review signed policies. Policy PDF: <a href="/BOXABL-EV-Charging-Policy.pdf" target="_blank" rel="noopener">open</a>.</p>
       <div class="tabs">
         <button type="button" class="active" data-tab="reservations">Reservations</button>
         <button type="button" data-tab="override">Override book</button>
         <button type="button" data-tab="flags">User flags</button>
         <button type="button" data-tab="acks">Policy acks</button>
+        <button type="button" data-tab="admins">Admins</button>
       </div>
     </section>
 
@@ -131,6 +132,31 @@
         </table>
       </div>
       <div class="msg" id="ack-msg" role="status"></div>
+    </section>
+
+    <section class="card tab-panel" id="panel-admins" hidden>
+      <h2>Admins</h2>
+      <p class="lede">Built-in admins come from Cloudflare <code>ADMIN_EMAILS</code> and stay admin forever here. Extra admins you add below are stored in the app (KV) and can be removed anytime. Only <code>@boxabl.com</code> addresses.</p>
+      <form id="admins-form">
+        <div class="form-grid">
+          <div class="field">
+            <label for="ad-email">Add admin email</label>
+            <input id="ad-email" type="email" required placeholder="name@boxabl.com">
+          </div>
+          <div class="field" style="display:flex;align-items:flex-end">
+            <button type="submit" class="btn btn-accent">Add admin</button>
+          </div>
+        </div>
+        <div class="msg" id="ad-msg" role="status"></div>
+      </form>
+      <div class="table-wrap" style="margin-top:14px">
+        <table>
+          <thead>
+            <tr><th>Email</th><th>Type</th><th></th></tr>
+          </thead>
+          <tbody id="admins-body"><tr><td colspan="3">Loading…</td></tr></tbody>
+        </table>
+      </div>
     </section>
   </main>
   <script src="/admin.js"></script>

@@ -34,6 +34,7 @@ document.querySelectorAll(".tabs button").forEach((btn) => {
     });
     if (tab === "acks") loadAcks();
     if (tab === "reservations") loadReservations();
+    if (tab === "admins") loadAdmins();
   });
 });
 
@@ -141,6 +142,25 @@ document.addEventListener("click", async (e) => {
     return;
   }
 
+  const removeAdmin = t.getAttribute("data-remove-admin");
+  if (removeAdmin) {
+    if (!confirm("Remove admin access for " + removeAdmin + "?")) return;
+    t.disabled = true;
+    try {
+      await api("/api/admin/admins/remove", {
+        method: "POST",
+        body: JSON.stringify({ email: removeAdmin }),
+      });
+      showMsg($("ad-msg"), "Removed.", "ok");
+      await loadAdmins();
+    } catch (err) {
+      showMsg($("ad-msg"), err.message, "error");
+    } finally {
+      t.disabled = false;
+    }
+    return;
+  }
+
   const id = t.getAttribute("data-release");
   if (!id) return;
   if (!confirm("Release this stall? (Counts as company cancel — does not consume charging day.)")) return;
@@ -203,6 +223,40 @@ $("flags-form").addEventListener("submit", async (e) => {
     showMsg($("fl-msg"), "Flags saved.", "ok");
   } catch (err) {
     showMsg($("fl-msg"), err.message, "error");
+  }
+});
+
+
+async function loadAdmins() {
+  const data = await api("/api/admin/admins");
+  const body = $("admins-body");
+  showMsg($("ad-msg"), "");
+  const seedSet = new Set(data.seed || []);
+  const rows = (data.all || []).map((email) => {
+    const builtIn = seedSet.has(email);
+    const type = builtIn ? "Built-in" : "Added";
+    const action = builtIn
+      ? `<span class="sub">Can't remove here</span>`
+      : `<button type="button" class="btn btn-danger" data-remove-admin="${esc(email)}">Remove</button>`;
+    return `<tr><td>${esc(email)}</td><td>${type}</td><td>${action}</td></tr>`;
+  });
+  body.innerHTML = rows.length
+    ? rows.join("")
+    : `<tr><td colspan="3">No admins configured.</td></tr>`;
+}
+
+$("admins-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  try {
+    await api("/api/admin/admins", {
+      method: "POST",
+      body: JSON.stringify({ email: $("ad-email").value.trim() }),
+    });
+    $("ad-email").value = "";
+    showMsg($("ad-msg"), "Admin added.", "ok");
+    await loadAdmins();
+  } catch (err) {
+    showMsg($("ad-msg"), err.message, "error");
   }
 });
 

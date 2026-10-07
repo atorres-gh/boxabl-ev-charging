@@ -1,4 +1,5 @@
 import type { Env } from "./env";
+import { seedAdminEmails } from "./env";
 import { randomId } from "./crypto";
 import type { Ymd } from "./time";
 
@@ -191,4 +192,92 @@ export function intervalsOverlap(
   bEnd: number
 ): boolean {
   return aStart < bEnd && bStart < aEnd;
+}
+
+/** KV key for admins added via the Admin UI (merged with env ADMIN_EMAILS seed). */
+const EXTRA_ADMINS_KEY = "admins:extra";
+
+export async function getExtraAdmins(env: Env): Promise<string[]> {
+  const list = (await env.EV_STORE.get(EXTRA_ADMINS_KEY, "json")) as string[] | null;
+  if (!Array.isArray(list)) return [];
+  return [
+    ...new Set(
+      list
+        .map((e) => String(e || "").trim().toLowerCase())
+        .filter(Boolean)
+    ),
+  ].sort();
+}
+
+async function putExtraAdmins(env: Env, emails: string[]): Promise<string[]> {
+  const cleaned = [
+    ...new Set(
+      emails
+        .map((e) => String(e || "").trim().toLowerCase())
+        .filter(Boolean)
+    ),
+  ].sort();
+  await env.EV_STORE.put(EXTRA_ADMINS_KEY, JSON.stringify(cleaned));
+  return cleaned;
+}
+
+/** True when email is in env ADMIN_EMAILS seed or KV extras. */
+export async function isAdmin(env: Env, email: string): Promise<boolean> {
+  const e = email.trim().toLowerCase();
+  if (!e) return false;
+  if (seedAdminEmails(env).has(e)) return true;
+  const extras = await getExtraAdmins(env);
+  return extras.includes(e);
+}
+
+export async function listAdmins(env: Env): Promise<{
+  seed: string[];
+  extra: string[];
+  all: string[];
+}> {
+  const seed = [...seedAdminEmails(env)].sort();
+  const extra = await getExtraAdmins(env);
+  const all = [...new Set([...seed, ...extra])].sort();
+  return { seed, extra, all };
+}
+
+export async function addExtraAdmin(
+  env: Env,
+  email: string
+): Promise<{ ok: true; extra: string[] } | { ok: false; error: string }> {
+  const e = email.trim().toLowerCase();
+  if (!e) return { ok: false, error: "Enter an email." };
+  const seed = seedAdminEmails(env);
+  if (seed.has(e)) {
+    return { ok: false, error: "That address is already a built-in admin." };
+  }
+  const extras = await getExtraAdmins(env);
+  if (extras.includes(e)) {
+    return { ok: false, error: "That address is already on the admin list." };
+  }
+  const next = await putExtraAdmins(env, [...extras, e]);
+  return { ok: true, extra: next };
+}
+
+export async function removeExtraAdmin(
+  env: Env,
+  email: string
+): Promise<{ ok: true; extra: string[] } | { ok: false; error: string }> {
+  const e = email.trim().toLowerCase();
+  if (!e) return { ok: false, error: "Enter an email." };
+  if (seedAdminEmails(env).has(e)) {
+    return {
+      ok: false,
+      error: "Built-in admin — change ADMIN_EMAILS in Cloudflare if you need to remove them.",
+    };
+  }
+  const extras = await getExtraAdmins(env);
+  if (!extras.includes(e)) {
+    return { ok: false, error: "That address is not on the added-admin list." };
+  }
+  const next = await putExtraAdmins(
+    env,
+    extras.filter((x) => x !== e)
+  );
+  return { ok: true, extra: next };
 }

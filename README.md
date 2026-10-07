@@ -22,13 +22,13 @@ Policy source: `public/BOXABL-EV-Charging-Policy.pdf` (copied from the company P
 | Grace | **15 minutes** after start → marked releasable; admin can release anytime |
 | Cancel / I’m done | Frees the stall early |
 | First book | Policy checkbox + **printed name** + **drawn signature** + stored ack (email, name, signature PNG, timestamp, version `2026-onsite-ev-v3` on new signs) |
-| Admin | `ADMIN_EMAILS` comma list — list, release, override, flags, policy acks, **download signed PDF** |
+| Admin | Built-in `ADMIN_EMAILS` seed ∪ KV extras (Admins tab) — list, release, override, flags, policy acks, **download signed PDF**, add/remove extra admins |
 
 **Not modeled yet:** company holiday calendar (weekends only); founder/exec priority bump workflow; Outlook room resource sync (this app replaces Outlook booking for the MVP).
 
 ## Policy sign alerts
 
-Every successful policy acknowledgment (standalone `POST /api/policy-ack` or first-reserve path) notifies **alexis.t@boxabl.com** and any other addresses in `ADMIN_EMAILS`.
+Every successful policy acknowledgment (standalone `POST /api/policy-ack` or first-reserve path) notifies **alexis.t@boxabl.com** and every admin (built-in `ADMIN_EMAILS` plus extras added in the Admin UI).
 
 - Subject: `EV charging policy signed — {printedName}`
 - Body: signer email, printed name, signed-at (PT), policy version, app link.
@@ -37,9 +37,19 @@ Every successful policy acknowledgment (standalone `POST /api/policy-ack` or fir
 - `MAIL_PROVIDER=stub` (current workers.dev): logs subject/to/body and `[mail:stub] policy-ack signed PDF …` with filename + byte length; ack still succeeds.
 - `MAIL_PROVIDER=graph`: Outlook sendMail with `#microsoft.graph.fileAttachment` (`contentBytes` base64). Mail failure never blocks the ack.
 
+
+## Admins (seed ∪ extras)
+
+Who counts as admin: **union** of Cloudflare env `ADMIN_EMAILS` (built-in seed) and KV key `admins:extra` (emails added on **Admin → Admins**).
+
+- Built-in seed always stays admin; the UI labels them **Built-in** and will not remove them (change `ADMIN_EMAILS` in Cloudflare / `wrangler.toml` if needed).
+- Extra admins must be `@boxabl.com`; only existing admins can add/remove extras.
+- `alexis.t@boxabl.com` is on the built-in seed and must stay there.
+- Env vars are not writable at runtime — that is why extras live in KV.
+
 ## Stack
 
-Cloudflare **Workers** + static `public/` assets, TypeScript, Wrangler, single **KV** namespace (`EV_STORE`) for OTP, sessions, reservations, policy acks, and user flags. `MAIL_PROVIDER=stub` returns `previewCode` on the sign-in page (same pattern as Fabulous Tools Hub).
+Cloudflare **Workers** + static `public/` assets, TypeScript, Wrangler, single **KV** namespace (`EV_STORE`) for OTP, sessions, reservations, policy acks, user flags, and extra admins. `MAIL_PROVIDER=stub` returns `previewCode` on the sign-in page (same pattern as Fabulous Tools Hub).
 
 Palette: paper `#f4f1ea`, ink `#0b1d36`, navy `#184273`, accent `#ffa400`. Body font: Lato.
 
@@ -78,9 +88,9 @@ npm run dev                      # http://localhost:8787
 
 1. Open `/` — enter any `you@boxabl.com`.
 2. Stub mail shows **previewCode** on the page.
-3. After verify → `/app.html`. Admins in `ADMIN_EMAILS` can open `/admin.html`.
+3. After verify → `/app.html`. Admins (built-in `ADMIN_EMAILS` or added via Admin → Admins) can open `/admin.html`.
 4. First reserve: check policy ack (PDF link), type printed name, draw signature, then book.
-5. On each successful policy sign, the app emails **alexis.t@boxabl.com** plus everyone in `ADMIN_EMAILS` with the **signed policy PDF** attached (stub logs filename + size; Graph sends when `MAIL_PROVIDER=graph`).
+5. On each successful policy sign, the app emails **alexis.t@boxabl.com** plus all admins with the **signed policy PDF** attached (stub logs filename + size; Graph sends when `MAIL_PROVIDER=graph`).
 
 Local KV uses Wrangler’s miniflare preview automatically (placeholder ids in `wrangler.toml` are fine for `wrangler dev`).
 
@@ -105,6 +115,9 @@ Local KV uses Wrangler’s miniflare preview automatically (placeholder ids in `
 | `GET`/`POST` | `/api/admin/flags` | Contractor / hours / cadence flags |
 | `GET` | `/api/admin/policy-acks` | Ack list |
 | `GET` | `/api/admin/policy-acks/:email/signed-pdf` | Download stamped policy PDF (admin; URL-encode email) |
+| `GET` | `/api/admin/admins` | List built-in seed + KV extras |
+| `POST` | `/api/admin/admins` | `{ email }` add `@boxabl.com` extra admin |
+| `POST` | `/api/admin/admins/remove` | `{ email }` remove KV extra (not built-in) |
 
 ## Deploy (when company Cloudflare is ready)
 
@@ -131,7 +144,7 @@ Local KV uses Wrangler’s miniflare preview automatically (placeholder ids in `
 | Name | Where | Purpose |
 |------|--------|---------|
 | `SESSION_SECRET` | secret / `.dev.vars` | Cookie HMAC + OTP salt |
-| `ADMIN_EMAILS` | `[vars]` / `.dev.vars` | Comma-separated Office Manager emails (keep out of empty `[vars]` placeholder — empty string overrides) |
+| `ADMIN_EMAILS` | `[vars]` / `.dev.vars` | Built-in admin seed (comma list). Always admin; not removable in UI. Extra admins live in KV `admins:extra` via Admin → Admins tab |
 | `ALLOWED_EMAIL_DOMAIN` | vars | Default `boxabl.com` |
 | `SPOT_COUNT` | vars | Default `1` |
 | `STATION_NAME` | vars | Default `F1 Charge Station` |

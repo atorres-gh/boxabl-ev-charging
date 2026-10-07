@@ -73,7 +73,8 @@ export function timezone(env: Env): string {
   return env.TIMEZONE || "America/Los_Angeles";
 }
 
-export function adminEmails(env: Env): Set<string> {
+/** Built-in admins from Cloudflare ADMIN_EMAILS (always admin; not removable in UI). */
+export function seedAdminEmails(env: Env): Set<string> {
   const raw = env.ADMIN_EMAILS || "";
   return new Set(
     raw
@@ -83,6 +84,12 @@ export function adminEmails(env: Env): Set<string> {
   );
 }
 
-export function isAdmin(env: Env, email: string): boolean {
-  return adminEmails(env).has(email.trim().toLowerCase());
+/** @deprecated Prefer seedAdminEmails; kept as alias for seed list. */
+export function adminEmails(env: Env): Set<string> {
+  return seedAdminEmails(env);
+}
+
+/** Sync seed-only check. Prefer async isAdmin from store.ts (seed ∪ KV extras). */
+export function isSeedAdmin(env: Env, email: string): boolean {
+  return seedAdminEmails(env).has(email.trim().toLowerCase());
 }

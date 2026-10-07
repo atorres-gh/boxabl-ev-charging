@@ -1,5 +1,5 @@
 import type { Env } from "./env";
-import { adminEmails, isAdmin, stationName, timezone } from "./env";
+import { seedAdminEmails, stationName, timezone } from "./env";
 import { createMailSender } from "./mail";
 import {
   buildSignedPolicyPdf,
@@ -16,10 +16,13 @@ import {
   suggestBookableDates,
 } from "./eligibility";
 import {
+  addExtraAdmin,
   getPolicyAck,
   getReservation,
   getUserFlags,
+  isAdmin,
   isCompletePolicyAck,
+  listAdmins,
   listAllReservations,
   listPolicyAcks,
   listReservationsForDay,
@@ -28,6 +31,7 @@ import {
   putPolicyAck,
   putReservation,
   putUserFlags,
+  removeExtraAdmin,
   type Reservation,
 } from "./store";
 import { parseHmToMinutes, todayYmd } from "./time";
@@ -58,7 +62,7 @@ export default {
           return handleMe(env, session.email);
         }
         if (path === "/api/config" && request.method === "GET") {
-          return handleConfig(env, session.email);
+          return await handleConfig(env, session.email);
         }
         if (path === "/api/policy-ack" && request.method === "GET") {
           const ack = await getPolicyAck(env, session.email);
@@ -91,7 +95,7 @@ export default {
 
         // ── Admin ───────────────────────────────────────────
         if (path.startsWith("/api/admin/")) {
-          if (!isAdmin(env, session.email)) {
+          if (!(await isAdmin(env, session.email))) {
             return json({ error: "Admin access required." }, 403);
           }
           if (path === "/api/admin/reservations" && request.method === "GET") {
@@ -126,6 +130,15 @@ export default {
           }
           if (path === "/api/admin/flags" && request.method === "POST") {
             return await handleAdminFlags(request, env, session.email);
+          }
+          if (path === "/api/admin/admins" && request.method === "GET") {
+            return await handleAdminListAdmins(env);
+          }
+          if (path === "/api/admin/admins" && request.method === "POST") {
+            return await handleAdminAddAdmin(request, env);
+          }
+          if (path === "/api/admin/admins/remove" && request.method === "POST") {
+            return await handleAdminRemoveAdmin(request, env);
           }
           return json({ error: "Not found." }, 404);
         }
@@ -191,7 +204,7 @@ async function handleVerify(request: Request, env: Env): Promise<Response> {
 
   const secure = new URL(request.url).protocol === "https:";
   const { cookie } = await createSession(env, email, secure);
-  return json({ ok: true, admin: isAdmin(env, email) }, 200, { "Set-Cookie": cookie });
+  return json({ ok: true, admin: await isAdmin(env, email) }, 200, { "Set-Cookie": cookie });
 }
 
 async function handleLogout(request: Request, env: Env, url: URL): Promise<Response> {
@@ -216,13 +229,13 @@ async function handleMe(env: Env, email: string): Promise<Response> {
   return json({
     ok: true,
     email,
-    admin: isAdmin(env, email),
+    admin: await isAdmin(env, email),
     policyAck: isCompletePolicyAck(ack) ? ack : null,
     flags,
   });
 }
 
-function handleConfig(env: Env, email: string): Response {
+async function handleConfig(env: Env, email: string): Promise<Response> {
   const tz = timezone(env);
   return json({
     ok: true,
@@ -236,7 +249,7 @@ function handleConfig(env: Env, email: string): Response {
     timezone: tz,
     today: todayYmd(tz),
     bookableDates: suggestBookableDates(env),
-    admin: isAdmin(env, email),
+    admin: await isAdmin(env, email),
     policyPdf: "/BOXABL-EV-Charging-Policy.pdf",
   });
 }
@@ -280,9 +293,11 @@ async function handleAdminSignedPdf(
 
 const POLICY_ALERT_ALWAYS = "alexis.t@boxabl.com";
 
-function policyAckAlertRecipients(env: Env): string[] {
+async function policyAckAlertRecipients(env: Env): Promise<string[]> {
   const set = new Set<string>([POLICY_ALERT_ALWAYS.toLowerCase()]);
-  for (const e of adminEmails(env)) set.add(e);
+  for (const e of seedAdminEmails(env)) set.add(e);
+  const listed = await listAdmins(env);
+  for (const e of listed.extra) set.add(e);
   return [...set];
 }
 
@@ -321,7 +336,7 @@ async function notifyPolicyAck(
       acknowledgedAtIso: ack.acknowledgedAt,
       policyVersion: ack.policyVersion,
       appUrl: `${url.origin}/`,
-      to: policyAckAlertRecipients(env),
+      to: await policyAckAlertRecipients(env),
       attachment,
     });
   } catch (err) {
@@ -584,6 +599,32 @@ async function handleAdminFlags(
   return json({ ok: true, flags });
 }
 
+async function handleAdminListAdmins(env: Env): Promise<Response> {
+  const listed = await listAdmins(env);
+  return json({ ok: true, ...listed });
+}
+
+async function handleAdminAddAdmin(request: Request, env: Env): Promise<Response> {
+  const body = await readJson(request);
+  const email = normalizeEmail(String(body.email || ""));
+  const domainErr = assertAllowedEmail(email, env.ALLOWED_EMAIL_DOMAIN);
+  if (domainErr) return json({ error: domainErr }, 400);
+  const result = await addExtraAdmin(env, email);
+  if (!result.ok) return json({ error: result.error }, 400);
+  const listed = await listAdmins(env);
+  return json({ ok: true, ...listed }, 201);
+}
+
+async function handleAdminRemoveAdmin(request: Request, env: Env): Promise<Response> {
+  const body = await readJson(request);
+  const email = normalizeEmail(String(body.email || ""));
+  if (!email) return json({ error: "email required." }, 400);
+  const result = await removeExtraAdmin(env, email);
+  if (!result.ok) return json({ error: result.error }, 400);
+  const listed = await listAdmins(env);
+  return json({ ok: true, ...listed });
+}
+
 async function handlePage(request: Request, env: Env, path: string): Promise<Response> {
   const session = await readSession(env, request);
   const normalized = path === "/" || path === "" ? "/" : path;
@@ -601,7 +642,7 @@ async function handlePage(request: Request, env: Env, path: string): Promise<Res
   }
 
   if (session && (normalized === "/admin.html" || normalized === "/admin")) {
-    if (!isAdmin(env, session.email)) {
+    if (!(await isAdmin(env, session.email))) {
       return asset(env, request, "/app.html");
     }
   }
